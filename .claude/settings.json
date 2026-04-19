@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl *)",
+      "Bash(streamlit run *)",
+      "Bash(python3 -m pip install *)",
+      "Bash(python3 -m pip uninstall *)",
+      "Bash(python3 -m pip list)",
+      "Bash(python3 -m pip show *)",
+      "Bash(python3 -m pip freeze)",
+      "Bash(python3 -m pytest *)",
+      "Bash(python3 -m streamlit *)",
+      "Bash(kill *)",
+      "Bash(pkill *)",
+      "Bash(lsof *)",
+      "Bash(port *)"
+    ]
+  }
+}
