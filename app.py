@@ -5,7 +5,7 @@ import plotly.express as px
 
 from data import generate_data, compute_highlights, BRANCHES, METRIC_META
 
-# ── Page config ────────────────────────────────────────────────────────────────
+# ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Branch.ai",
     layout="wide",
@@ -15,68 +15,115 @@ st.set_page_config(
 st.markdown("""
 <style>
   [data-testid="stAppViewContainer"] > .main { background: #f7f8fc; }
-  [data-testid="stHeader"] { background: transparent; }
-  [data-testid="stChatInput"] textarea { border-radius: 12px; }
+  /* Hide Streamlit's native header — we use our own fixed banner */
+  [data-testid="stHeader"] { display: none !important; }
+  /* Push page content below the fixed banner */
+  [data-testid="block-container"] { padding-top: 78px !important; }
+
+  /* Chat input */
+  [data-testid="stChatInput"] {
+    border-radius: 14px !important;
+    border: 1.5px solid #e5e7eb !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06) !important;
+    background: #fff !important;
+  }
+  [data-testid="stChatInput"]:focus-within {
+    border-color: #4f46e5 !important;
+    box-shadow: 0 0 0 3px rgba(79,70,229,0.10) !important;
+  }
+  [data-testid="stChatInput"] textarea { font-size: 0.9rem !important; }
+  [data-testid="stChatInput"] button { border-radius: 10px !important; background: #4f46e5 !important; }
+
   div[data-testid="stHorizontalBlock"] { align-items: flex-start; }
 
-  /* 3D card effect on bordered containers */
+  /* 3D insight cards */
   div[data-testid="stVerticalBlockBorderWrapper"] {
     box-shadow: 0 4px 12px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.08) !important;
     border-radius: 12px !important;
     transition: transform 0.15s ease, box-shadow 0.15s ease !important;
     cursor: pointer !important;
     background: white !important;
+    position: relative !important;
   }
   div[data-testid="stVerticalBlockBorderWrapper"]:hover {
     transform: translateY(-3px) !important;
     box-shadow: 0 8px 24px rgba(0,0,0,0.14), 0 2px 6px rgba(0,0,0,0.10) !important;
   }
-
-  /* Style "Analyse" trigger as minimal text link inside cards */
-  div[data-testid="stVerticalBlockBorderWrapper"] button[kind="secondary"] {
-    background: transparent !important;
-    border: none !important;
-    color: #6b7280 !important;
-    font-size: 0.75rem !important;
-    padding: 0 !important;
-    box-shadow: none !important;
-    text-decoration: underline !important;
+  /* Hide card trigger button — click wired via JS */
+  div[data-testid="stVerticalBlockBorderWrapper"] .stButton {
+    height: 0 !important; overflow: hidden !important;
+    margin: 0 !important; padding: 0 !important;
   }
-  div[data-testid="stVerticalBlockBorderWrapper"] button[kind="secondary"]:hover {
-    color: #111827 !important;
-    background: transparent !important;
+  div[data-testid="stVerticalBlockBorderWrapper"] .stButton button {
+    height: 0 !important; min-height: 0 !important; width: 0 !important;
+    padding: 0 !important; opacity: 0 !important; border: none !important;
   }
 
-  /* Deep dive analysis section */
-  .deep-dive-wrap {
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 14px;
-    padding: 1.4rem 1.6rem 1rem;
-    margin-top: 0.8rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  /* Question / follow-up pill buttons */
+  .stButton button[kind="primary"] {
+    background: #f8f9ff !important;
+    border: 1.5px solid #c7d2fe !important;
+    border-radius: 20px !important;
+    color: #4338ca !important;
+    font-size: 0.82rem !important;
+    font-weight: 500 !important;
+    padding: 0.35rem 1rem !important;
+    transition: all 0.15s ease !important;
+    white-space: normal !important;
+    line-height: 1.4 !important;
+    text-align: center !important;
+  }
+  .stButton button[kind="primary"]:hover {
+    background: #e0e7ff !important;
+    border-color: #818cf8 !important;
+    color: #3730a3 !important;
+    box-shadow: 0 2px 8px rgba(79,70,229,0.15) !important;
+    transform: translateY(-1px) !important;
+  }
+
+  /* Analysis text formatting */
+  [data-testid="stChatMessage"] ul, [data-testid="stChatMessage"] ol {
+    margin-left: 1.4rem !important;
+    margin-top: 0.3rem !important;
+    margin-bottom: 0.5rem !important;
+  }
+  [data-testid="stChatMessage"] li {
+    margin-bottom: 0.3rem !important;
+    line-height: 1.7 !important;
+  }
+  [data-testid="stChatMessage"] p {
+    margin-bottom: 0.55rem !important;
+    line-height: 1.65 !important;
   }
 </style>
 """, unsafe_allow_html=True)
 
-# ── Data ───────────────────────────────────────────────────────────────────────
+# ── Data ──────────────────────────────────────────────────────────────────────
 df = generate_data()
 positives, negatives = compute_highlights(df)
 
-# ── Session state ──────────────────────────────────────────────────────────────
+# ── Session state ─────────────────────────────────────────────────────────────
+_DEFAULT_QUESTIONS = [
+    "Which branch has the longest wait times?",
+    "How is counter utilisation trending?",
+    "Which branches are losing the most customers?",
+]
+
 for key, default in [
     ("chat_messages", []),
     ("pending_analysis", None),
+    ("_scroll_to_chat", False),
+    ("suggested_questions", _DEFAULT_QUESTIONS),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
 
 
-# ── Chart helper ───────────────────────────────────────────────────────────────
+# ── Chart helper ──────────────────────────────────────────────────────────────
 def _generate_chart(spec: dict, highlight_branch: str = None):
     chart_type = spec.get("type", "line")
     metric     = spec.get("metric")
-    branches   = spec.get("branches")
+    branches   = spec.get("branches") or []
     title      = spec.get("title", "")
 
     if not metric or metric not in df.columns:
@@ -129,14 +176,29 @@ def _generate_chart(spec: dict, highlight_branch: str = None):
     return None
 
 
-# ── Inline deep dive renderer ──────────────────────────────────────────────────
+# ── Question pill renderer ────────────────────────────────────────────────────
+def _render_question_pills(questions: list, key_prefix: str, label: str = "Suggested questions"):
+    st.markdown(f"""
+    <div style="font-size:0.7rem;font-weight:700;color:#9ca3af;letter-spacing:0.07em;
+                text-transform:uppercase;margin:0.8rem 0 0.4rem;">
+      {label}
+    </div>""", unsafe_allow_html=True)
+    cols = st.columns(len(questions))
+    for i, q in enumerate(questions):
+        with cols[i]:
+            if st.button(q, key=f"{key_prefix}_{i}", use_container_width=True, type="primary"):
+                st.session_state.chat_messages.append({"role": "user", "content": q})
+                st.session_state.pending_analysis = {"question": q}
+                st.session_state._scroll_to_chat = True
+                st.rerun()
+
+
+# ── Deep dive renderer ────────────────────────────────────────────────────────
 def _render_deep_dive(ctx: dict):
     question = ctx.get("question", "Performance Analysis")
     branch   = ctx.get("branch", "")
     metric   = ctx.get("metric", "")
     label    = METRIC_META[metric]["label"] if metric else ""
-
-    st.markdown('<div class="deep-dive-wrap">', unsafe_allow_html=True)
 
     if branch and metric:
         st.markdown(f"#### {label} — {branch} Branch")
@@ -147,126 +209,63 @@ def _render_deep_dive(ctx: dict):
     cache_key = f"llm_{abs(hash(str(ctx)))}"
 
     if cache_key not in st.session_state:
-        # Stream the analysis text
         try:
             import anthropic
-            from llm import _get_api_key
-            import json, re, os
-            from data import METRIC_META as MM
+            from llm import _get_api_key, TOOLS, build_prompt
 
             api_key = _get_api_key()
             if api_key:
-                latest_m = df["month"].max()
-                recent   = df[df["month"] >= latest_m - pd.DateOffset(months=2)]
-                summary  = recent.groupby("branch")[[
-                    "avg_wait_time", "missed_queue", "total_transactions",
-                    "counter_utilization", "corporate_clients", "senior_pct",
-                    "staff_seedling", "staff_sapling", "staff_mature",
-                ]].mean().round(1)
-
-                focus = ""
-                if branch and metric:
-                    unit_str = MM.get(metric, {}).get("unit", "")
-                    lbl      = MM.get(metric, {}).get("label", metric)
-                    vals     = df[df["branch"] == branch].sort_values("month")[metric].tolist()
-                    focus = (
-                        f"\nFocus: {lbl} at {branch} branch.\n"
-                        f"27-month history (Jan 2024–Mar 2026): {[round(v, 1) for v in vals]} {unit_str}\n"
-                    )
-
-                available = [k for k in MM if k not in ("staff_seedling", "staff_sapling", "staff_mature")]
-
-                prompt = f"""You are a banking analytics assistant for OCSG Bank, a Singapore retail bank with 8 branches.
-The General Manager asks: "{question}"
-{focus}
-Branch performance data (3-month average, most recent period):
-{summary.to_string()}
-
-Metric guide:
-- avg_wait_time: customer wait time (min) — lower is better
-- missed_queue: customers who left unserved — lower is better
-- total_transactions: total volume processed — higher is better
-- counter_utilization: % capacity used; 70–90% optimal
-- corporate_clients: corporate visits/month — higher is better
-- senior_pct: % customers aged 60+ (contextual)
-- queue_tokens: queue numbers issued — higher means more demand
-- avg_handling_time: transaction handling time (min)
-
-Respond ONLY with a valid JSON object, no markdown, no extra text:
-{{
-  "analysis": "**Key Finding:** (1-2 sentences)\\n\\n**Analysis:** (2-3 sentences citing specific numbers)\\n\\n**Recommendations:**\\n• (action 1)\\n• (action 2)\\n• (action 3)",
-  "charts": [
-    {{
-      "type": "line",
-      "metric": "metric_name",
-      "branches": null,
-      "title": "Descriptive chart title"
-    }},
-    {{
-      "type": "bar",
-      "metric": "metric_name",
-      "branches": null,
-      "title": "Descriptive chart title"
-    }}
-  ]
-}}
-
-Rules:
-- Provide exactly 2 charts that best visualise the key findings
-- "type": "line" for monthly trends, "bar" for branch comparisons
-- "branches": null for all 8 branches, or e.g. ["Orchard","Woodlands"] to focus
-- Only use metrics from: {available}
-- Analysis under 180 words, professional, data-driven, for senior management"""
-
-                client = anthropic.Anthropic(api_key=api_key)
-
-                # Stream and accumulate
+                prompt   = build_prompt(question, df, ctx)
+                client   = anthropic.Anthropic(api_key=api_key)
                 full_text = ""
                 placeholder = st.empty()
+
                 with client.messages.stream(
                     model="claude-sonnet-4-6",
-                    max_tokens=700,
+                    max_tokens=1000,
+                    tools=TOOLS,
+                    tool_choice={"type": "auto"},
                     messages=[{"role": "user", "content": prompt}],
                 ) as stream:
-                    for text_chunk in stream.text_stream:
-                        full_text += text_chunk
-                        # Show raw accumulation while streaming
+                    for chunk in stream.text_stream:
+                        full_text += chunk
                         placeholder.markdown(full_text + "▌")
+                    final_msg = stream.get_final_message()
 
                 placeholder.empty()
 
-                # Parse JSON from streamed result
-                m = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", full_text)
-                text_to_parse = m.group(1) if m else full_text
-                try:
-                    result = json.loads(text_to_parse)
-                    result.setdefault("analysis", full_text)
-                    result.setdefault("charts", [])
-                except json.JSONDecodeError:
-                    result = {"analysis": full_text, "charts": []}
+                charts, follow_up = [], []
+                for block in final_msg.content:
+                    if block.type == "tool_use":
+                        if block.name == "generate_plot":
+                            charts.append(dict(block.input))
+                        elif block.name == "suggest_followup":
+                            follow_up = block.input.get("questions", [])[:3]
 
+                result = {"analysis": full_text, "charts": charts, "follow_up": follow_up}
                 st.session_state[cache_key] = result
-                if not branch and not metric:
-                    st.session_state.chat_messages.append(
-                        {"role": "assistant", "content": result.get("analysis", "")}
-                    )
+                st.session_state.chat_messages.append(
+                    {"role": "assistant", "content": full_text}
+                )
+                if follow_up:
+                    st.session_state.suggested_questions = follow_up
             else:
-                result = {"analysis": "_AI analysis requires `ANTHROPIC_API_KEY`._", "charts": []}
+                result = {"analysis": "_AI analysis requires `ANTHROPIC_API_KEY`._", "charts": [], "follow_up": []}
                 st.session_state[cache_key] = result
 
         except Exception as e:
-            result = {"analysis": f"_Analysis error: {e}_", "charts": []}
+            result = {"analysis": f"_Analysis error: {e}_", "charts": [], "follow_up": []}
             st.session_state[cache_key] = result
 
-    result = st.session_state[cache_key]
-    analysis_text = result.get("analysis", str(result)) if isinstance(result, dict) else str(result)
-    st.markdown(analysis_text)
+    result      = st.session_state[cache_key]
+    analysis    = result.get("analysis", str(result)) if isinstance(result, dict) else str(result)
+    charts      = result.get("charts", [])    if isinstance(result, dict) else []
+    follow_up   = result.get("follow_up", []) if isinstance(result, dict) else []
 
-    st.divider()
-
-    charts = result.get("charts", []) if isinstance(result, dict) else []
+    st.markdown(analysis)
 
     if charts:
+        st.divider()
         cols = st.columns(min(len(charts), 2))
         for i, spec in enumerate(charts[:4]):
             fig = _generate_chart(spec, highlight_branch=branch or None)
@@ -274,17 +273,19 @@ Rules:
                 with cols[i % 2]:
                     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
     elif metric:
+        st.divider()
         fig = _generate_chart(
-            {"type": "line", "metric": metric, "branches": None, "title": f"{label} — All Branches"},
+            {"type": "line", "metric": metric, "branches": [], "title": f"{label} — All Branches"},
             highlight_branch=branch,
         )
         if fig:
             st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-        fig2 = _generate_chart({"type": "bar", "metric": metric, "branches": None,
+        fig2 = _generate_chart({"type": "bar", "metric": metric, "branches": [],
                                  "title": f"{label} — Branch Comparison ({df['month'].max().strftime('%b %Y')})"})
         if fig2:
             st.plotly_chart(fig2, use_container_width=True, config={"displayModeBar": False})
     else:
+        st.divider()
         net = df.groupby("month")[["avg_wait_time", "missed_queue", "total_transactions"]].mean().reset_index()
         c1, c2 = st.columns(2)
         with c1:
@@ -300,10 +301,9 @@ Rules:
                                plot_bgcolor="white", paper_bgcolor="white")
             st.plotly_chart(fig2, use_container_width=True, config={"displayModeBar": False})
 
-    st.markdown('</div>', unsafe_allow_html=True)
 
 
-# ── Sparkline helper ───────────────────────────────────────────────────────────
+# ── Sparkline helper ──────────────────────────────────────────────────────────
 def _sparkline(values: list, line_color: str, fill_color: str):
     fig = go.Figure(go.Scatter(
         x=list(range(len(values))), y=values,
@@ -319,49 +319,51 @@ def _sparkline(values: list, line_color: str, fill_color: str):
     return fig
 
 
-# ── Banner ─────────────────────────────────────────────────────────────────────
+# ── Banner (fixed) ────────────────────────────────────────────────────────────
 st.markdown(f"""
-<div style="padding: 1.6rem 0 0.6rem;">
-  <div style="font-size: 1.8rem; font-weight: 800; color: #111827; letter-spacing: -0.03em;">
-    Branch.ai
+<div id="branch-banner" style="
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: rgba(247,248,252,0.97);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(229,231,235,0.8);
+    box-shadow: 0 1px 10px rgba(0,0,0,0.06);
+    padding: 0.6rem 3rem;
+    display: flex; align-items: center; gap: 1rem;">
+  <div style="background:linear-gradient(135deg,#4f46e5,#7c3aed);border-radius:11px;
+              padding:0.52rem;display:flex;align-items:center;justify-content:center;
+              box-shadow:0 3px 12px rgba(79,70,229,0.30);">
+    <svg width="26" height="26" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="15" cy="6"  r="2.8" fill="white"/>
+      <circle cx="6"  cy="22" r="2.8" fill="white"/>
+      <circle cx="24" cy="22" r="2.8" fill="white"/>
+      <line x1="15" y1="8.8"  x2="8"  y2="19.2" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+      <line x1="15" y1="8.8"  x2="22" y2="19.2" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+      <line x1="6"  y1="24.8" x2="24" y2="24.8" stroke="white" stroke-width="1.4"
+            stroke-linecap="round" opacity="0.35"/>
+    </svg>
   </div>
-  <div style="font-size: 0.88rem; color: #6b7280; margin-top: 0.2rem;">
-    Welcome, General Manager &nbsp;·&nbsp;
-    {pd.Timestamp.now().strftime('%A, %d %B %Y')} &nbsp;·&nbsp;
-    {len(BRANCHES)} branches &nbsp;·&nbsp;
-    Data: Jan 2024 – {df['month'].max().strftime('%b %Y')}
+  <div style="flex:1;">
+    <div style="font-size:1.65rem;font-weight:900;letter-spacing:-0.04em;line-height:1;
+                font-family:'Inter','SF Pro Display','Segoe UI',sans-serif;">
+      <span style="color:#111827;">Branch</span><span
+        style="background:linear-gradient(135deg,#4f46e5,#7c3aed);
+               -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+               background-clip:text;">.ai</span>
+    </div>
+    <div style="font-size:0.78rem;color:#6b7280;margin-top:0.18rem;">
+      Welcome, Country Manager &nbsp;·&nbsp;
+      {pd.Timestamp.now().strftime('%A, %d %B %Y')} &nbsp;·&nbsp;
+      {len(BRANCHES)} branches &nbsp;·&nbsp;
+      Data: Jan 2024 – {df['month'].max().strftime('%b %Y')}
+    </div>
   </div>
 </div>
 """, unsafe_allow_html=True)
 
-# ── Chat box ───────────────────────────────────────────────────────────────────
-for msg in st.session_state.chat_messages[-4:]:
-    avatar = "👔" if msg["role"] == "user" else "🏦"
-    with st.chat_message(msg["role"], avatar=avatar):
-        content = msg["content"]
-        st.write(content if isinstance(content, str) else content)
-
-prompt = st.chat_input(
-    "Ask about branch performance — e.g. 'Which branches have the worst wait times?'"
-)
-if prompt:
-    st.session_state.chat_messages.append({"role": "user", "content": prompt})
-    st.session_state.pending_analysis = {"question": prompt}
-    st.rerun()
-
-# ── Inline deep dive (chat-originated) ────────────────────────────────────────
-if st.session_state.pending_analysis:
-    ctx = st.session_state.pending_analysis
-    avatar = "🏦"
-    with st.chat_message("assistant", avatar=avatar):
-        _render_deep_dive(ctx)
-    st.session_state.pending_analysis = None
-
+# ── Highlights — 60 % page width ─────────────────────────────────────────────
 st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
 
-# ── Highlights — 60% page width, two equal columns ────────────────────────────
 _, highlights_col, _ = st.columns([2, 6, 2])
-
 with highlights_col:
     col_pos, col_neg = st.columns(2, gap="large")
 
@@ -385,50 +387,37 @@ def _render_cards(insights: list, is_positive: bool, col):
         for ins in insights:
             pct = ins["pct_change"]
             lib = ins["lower_is_better"]
-            arrow_badge = "↓" if pct < 0 else "↑"
-            badge = f"{arrow_badge} {abs(pct):.1f}%"
-
-            if lib:
-                verb = "decreased" if pct < 0 else "increased"
-            else:
-                verb = "increased" if pct > 0 else "decreased"
+            badge = f"{'↓' if pct < 0 else '↑'} {abs(pct):.1f}%"
+            verb  = ("decreased" if pct < 0 else "increased") if lib else ("increased" if pct > 0 else "decreased")
 
             with st.container(border=True):
                 st.markdown(f"""
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem;">
-                    <div>
-                        <span style="font-weight:600;font-size:0.85rem;color:#111;">
-                            {ins['label']}
-                        </span>
-                        <span style="font-size:0.78rem;color:#888;margin-left:0.5rem;">
-                            {ins['branch']}
-                        </span>
-                    </div>
-                    <span style="background:{lc};color:#fff;border-radius:12px;
-                                 padding:1px 9px;font-size:0.75rem;font-weight:600;">
-                        {badge}
-                    </span>
-                </div>
-                """, unsafe_allow_html=True)
+                  <div>
+                    <span style="font-weight:600;font-size:0.85rem;color:#111;">{ins['label']}</span>
+                    <span style="font-size:0.78rem;color:#888;margin-left:0.5rem;">{ins['branch']}</span>
+                  </div>
+                  <span style="background:{lc};color:#fff;border-radius:12px;
+                               padding:1px 9px;font-size:0.75rem;font-weight:600;">{badge}</span>
+                </div>""", unsafe_allow_html=True)
 
                 c_text, c_chart = st.columns([4, 2])
-
                 with c_text:
                     st.markdown(
-                        f"<p style='font-size:0.8rem;color:#444;line-height:1.5;margin:0 0 0.3rem;'>"
+                        f"<p style='font-size:0.8rem;color:#444;line-height:1.5;margin:0;'>"
                         f"{ins['branch']} <b>{ins['label'].lower()}</b> has {verb} "
-                        f"<b>{abs(pct):.1f}%</b>, now at "
-                        f"<b>{ins['current']:.1f} {ins['unit']}</b>.</p>",
+                        f"<b>{abs(pct):.1f}%</b>, now at <b>{ins['current']:.1f} {ins['unit']}</b>.</p>",
                         unsafe_allow_html=True,
                     )
-                    if st.button("Analyse →", key=f"btn_{ins['branch']}_{ins['metric']}"):
+                    # Hidden trigger — entire card is wired via JS below
+                    if st.button("▶", key=f"btn_{ins['branch']}_{ins['metric']}"):
                         st.session_state.pending_analysis = {
                             "question": f"Analyse {ins['label']} performance at {ins['branch']} branch",
                             "branch":   ins["branch"],
                             "metric":   ins["metric"],
                         }
+                        st.session_state._scroll_to_chat = True
                         st.rerun()
-
                 with c_chart:
                     branch_vals = (
                         df[df["branch"] == ins["branch"]]
@@ -446,3 +435,81 @@ def _render_cards(insights: list, is_positive: bool, col):
 
 _render_cards(positives, True,  col_pos)
 _render_cards(negatives, False, col_neg)
+
+# ── JS: wire whole-card click to hidden trigger button ────────────────────────
+st.markdown("""
+<script>
+(function() {
+  function wireCards() {
+    document.querySelectorAll('[data-testid="stVerticalBlockBorderWrapper"]').forEach(function(card) {
+      if (card._branchWired) return;
+      card._branchWired = true;
+      card.addEventListener('click', function(e) {
+        if (e.target.closest('iframe')) return;
+        var btn = card.querySelector('.stButton button');
+        if (btn) btn.click();
+      });
+    });
+  }
+  wireCards();
+  new MutationObserver(wireCards).observe(document.body, {childList: true, subtree: true});
+})();
+</script>""", unsafe_allow_html=True)
+
+# ── Chat box — 60 % page width ────────────────────────────────────────────────
+st.markdown("<div style='height:1.6rem'></div>", unsafe_allow_html=True)
+
+_, chat_col, _ = st.columns([2, 6, 2])
+
+with chat_col:
+    st.markdown("""
+    <div id="chat-section" style="display:flex;align-items:center;gap:0.55rem;margin-bottom:0.5rem;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24"
+           fill="none" stroke="#4f46e5" stroke-width="2.2"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+      </svg>
+      <span style="font-size:0.92rem;font-weight:700;color:#111827;letter-spacing:-0.01em;">
+        Ask the Data
+      </span>
+      <span style="font-size:0.8rem;color:#9ca3af;">— powered by Branch.ai</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    for msg in st.session_state.chat_messages[-4:]:
+        avatar = "👔" if msg["role"] == "user" else "🏦"
+        with st.chat_message(msg["role"], avatar=avatar):
+            st.write(msg["content"] if isinstance(msg["content"], str) else msg["content"])
+
+    prompt = st.chat_input(
+        "Ask about branch performance — e.g. 'Which branches have the worst wait times?'"
+    )
+    if prompt:
+        st.session_state.chat_messages.append({"role": "user", "content": prompt})
+        st.session_state.pending_analysis = {"question": prompt}
+        st.session_state._scroll_to_chat = True
+        st.rerun()
+
+    # ── Suggested Questions — always below the chat input ─────────────────────
+    _sq_label = "Quick questions" if not st.session_state.chat_messages else "Suggested follow-ups"
+    _sq_key   = f"sq_{abs(hash(tuple(st.session_state.suggested_questions)))}"
+    _render_question_pills(st.session_state.suggested_questions, key_prefix=_sq_key, label=_sq_label)
+
+    # ── Deep dive ─────────────────────────────────────────────────────────────
+    if st.session_state.pending_analysis:
+        ctx = st.session_state.pending_analysis
+        with st.chat_message("assistant", avatar="🏦"):
+            _render_deep_dive(ctx)
+        st.session_state.pending_analysis = None
+        st.rerun()  # refresh Suggested Questions with LLM follow-ups
+
+# Scroll to chat section after card click or question submission
+if st.session_state.get("_scroll_to_chat"):
+    st.markdown("""
+    <script>
+      setTimeout(function() {
+        var el = document.getElementById('chat-section');
+        if (el) el.scrollIntoView({behavior: 'smooth', block: 'start'});
+      }, 120);
+    </script>""", unsafe_allow_html=True)
+    st.session_state._scroll_to_chat = False

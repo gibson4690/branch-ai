@@ -5,6 +5,11 @@ import streamlit as st
 BRANCHES = ["Orchard", "Tampines", "Jurong East", "Woodlands",
             "Bishan", "Bugis", "Toa Payoh", "Clementi"]
 
+PLOT_CATALOGUE = {
+    "line": "Monthly trend over time for one metric",
+    "bar":  "Branch comparison for one metric at the latest period",
+}
+
 METRIC_META = {
     "avg_wait_time":       {"label": "Avg Wait Time",       "unit": "min",       "lower_is_better": True},
     "avg_handling_time":   {"label": "Avg Handling Time",   "unit": "min",       "lower_is_better": True},

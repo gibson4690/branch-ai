@@ -1,11 +1,60 @@
 import os
 import json
-import re
 from pathlib import Path
 import pandas as pd
-from data import METRIC_META
+from data import METRIC_META, BRANCHES, PLOT_CATALOGUE
 
 _SETTINGS_LOCAL = Path(__file__).parent / ".claude" / "settings.local.json"
+
+_CHARTABLE = [k for k in METRIC_META if k not in ("staff_seedling", "staff_sapling", "staff_mature")]
+
+TOOLS = [
+    {
+        "name": "generate_plot",
+        "description": (
+            "Render a chart to visualise a key data finding. "
+            f"Plot catalogue — {'; '.join(f'{k}: {v}' for k, v in PLOT_CATALOGUE.items())}. "
+            "Call this tool up to 2 times for the most insightful charts."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "enum": list(PLOT_CATALOGUE),
+                    "description": "Chart type from the plot catalogue",
+                },
+                "metric": {
+                    "type": "string",
+                    "enum": _CHARTABLE,
+                    "description": "Metric column to visualise",
+                },
+                "branches": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Branch names to include. Pass [] for all 8 branches.",
+                },
+                "title": {"type": "string", "description": "Descriptive chart title"},
+            },
+            "required": ["type", "metric", "title"],
+        },
+    },
+    {
+        "name": "suggest_followup",
+        "description": "Suggest exactly 3 concise follow-up questions for the General Manager to explore next.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "questions": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "3 short, specific follow-up questions (max 12 words each)",
+                }
+            },
+            "required": ["questions"],
+        },
+    },
+]
 
 
 def _get_api_key() -> str:
@@ -19,22 +68,9 @@ def _get_api_key() -> str:
     return os.environ.get("ANTHROPIC_API_KEY", "")
 
 
-def get_analysis(question: str, df: pd.DataFrame, ctx: dict = None) -> dict:
-    """Returns {"analysis": str, "charts": list[dict]}"""
-    try:
-        import anthropic
-    except ImportError:
-        return {"analysis": "_LLM unavailable — install the `anthropic` package._", "charts": []}
-
-    api_key = _get_api_key()
-    if not api_key:
-        return {
-            "analysis": "_AI analysis requires `ANTHROPIC_API_KEY` to be set in `.claude/settings.local.json`._",
-            "charts": [],
-        }
-
-    latest = df["month"].max()
-    recent = df[df["month"] >= latest - pd.DateOffset(months=2)]
+def build_prompt(question: str, df: pd.DataFrame, ctx: dict = None) -> str:
+    latest_m = df["month"].max()
+    recent = df[df["month"] >= latest_m - pd.DateOffset(months=2)]
     summary = recent.groupby("branch")[[
         "avg_wait_time", "missed_queue", "total_transactions",
         "counter_utilization", "corporate_clients", "senior_pct",
@@ -43,19 +79,17 @@ def get_analysis(question: str, df: pd.DataFrame, ctx: dict = None) -> dict:
 
     focus = ""
     if ctx and ctx.get("branch") and ctx.get("metric"):
-        branch, metric = ctx["branch"], ctx["metric"]
-        unit  = METRIC_META.get(metric, {}).get("unit", "")
-        label = METRIC_META.get(metric, {}).get("label", metric)
-        vals  = df[df["branch"] == branch].sort_values("month")[metric].tolist()
+        b, m = ctx["branch"], ctx["metric"]
+        unit  = METRIC_META.get(m, {}).get("unit", "")
+        label = METRIC_META.get(m, {}).get("label", m)
+        vals  = df[df["branch"] == b].sort_values("month")[m].tolist()
         focus = (
-            f"\nFocus: {label} at {branch} branch.\n"
-            f"27-month history (Jan 2024–Mar 2026): {[round(v, 1) for v in vals]} {unit}\n"
+            f"\nFocus: {label} at {b} branch.\n"
+            f"27-month history (Jan 2024 – Mar 2026): {[round(v, 1) for v in vals]} {unit}\n"
         )
 
-    available = [k for k in METRIC_META if k not in ("staff_seedling", "staff_sapling", "staff_mature")]
-
-    prompt = f"""You are a banking analytics assistant for OCSG Bank, a Singapore retail bank with 8 branches.
-The General Manager asks: "{question}"
+    return f"""You are a senior analytics assistant for UOSB, a local Singapore bank with 8 branches.
+The Country Manager asks: "{question}"
 {focus}
 Branch performance data (3-month average, most recent period):
 {summary.to_string()}
@@ -67,56 +101,18 @@ Metric guide:
 - counter_utilization: % capacity used; 70–90% optimal
 - corporate_clients: corporate visits/month — higher is better
 - senior_pct: % customers aged 60+ (contextual)
-- queue_tokens: queue numbers issued — higher means more demand
+- queue_tokens: queue numbers issued — proxy for demand
 - avg_handling_time: transaction handling time (min)
 
-Respond ONLY with a valid JSON object, no markdown, no extra text:
-{{
-  "analysis": "**Key Finding:** (1-2 sentences)\\n\\n**Analysis:** (2-3 sentences citing specific numbers)\\n\\n**Recommendations:**\\n• (action 1)\\n• (action 2)\\n• (action 3)",
-  "charts": [
-    {{
-      "type": "line",
-      "metric": "metric_name",
-      "branches": null,
-      "title": "Descriptive chart title"
-    }},
-    {{
-      "type": "bar",
-      "metric": "metric_name",
-      "branches": null,
-      "title": "Descriptive chart title"
-    }}
-  ]
-}}
+Write a concise, professional analysis (under 180 words) for senior management using this structure:
 
-Rules:
-- Provide exactly 2 charts that best visualise the key findings
-- "type": "line" for monthly trends, "bar" for branch comparisons
-- "branches": null for all 8 branches, or e.g. ["Orchard","Woodlands"] to focus
-- Only use metrics from: {available}
-- Analysis under 180 words, professional, data-driven, for senior management"""
+**Key Finding:** 1-2 sentences summarising the most important insight.
 
-    try:
-        client = anthropic.Anthropic(api_key=api_key)
-        msg = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=700,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        raw = msg.content[0].text.strip()
+**Analysis:** 2-3 sentences citing specific numbers and branch names.
 
-        # Strip markdown code fence if present
-        m = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", raw)
-        text = m.group(1) if m else raw
+**Recommendations:**
+  - Recommendation 1
+  - Recommendation 2
+  - Recommendation 3
 
-        try:
-            result = json.loads(text)
-        except json.JSONDecodeError:
-            return {"analysis": raw, "charts": []}
-
-        result.setdefault("analysis", raw)
-        result.setdefault("charts", [])
-        return result
-
-    except Exception as e:
-        return {"analysis": f"_Analysis error: {e}_", "charts": []}
+Use proper markdown indentation. Then call generate_plot up to 2 times for the most insightful charts, and call suggest_followup with 3 short follow-up questions."""
