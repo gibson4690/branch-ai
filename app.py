@@ -121,10 +121,12 @@ for key, default in [
 
 # ── Chart helper ──────────────────────────────────────────────────────────────
 def _generate_chart(spec: dict, highlight_branch: str = None):
-    chart_type = spec.get("type", "line")
-    metric     = spec.get("metric")
-    branches   = spec.get("branches") or []
-    title      = spec.get("title", "")
+    chart_type  = spec.get("type", "line")
+    metric      = spec.get("metric")
+    metric_y    = spec.get("metric_y")
+    branches    = spec.get("branches") or []
+    title       = spec.get("title", "")
+    months_back = spec.get("months_back")
 
     if not metric or metric not in df.columns:
         return None
@@ -134,7 +136,20 @@ def _generate_chart(spec: dict, highlight_branch: str = None):
     unit  = meta.get("unit", "")
     asc   = meta.get("lower_is_better", False)
 
-    subset = df[df["branch"].isin(branches)] if branches else df
+    # Optionally restrict to a recent time window
+    if months_back:
+        latest_m = df["month"].max()
+        cutoff   = latest_m - pd.DateOffset(months=int(months_back) - 1)
+        base = df[df["month"] >= cutoff]
+    else:
+        base = df
+
+    subset = base[base["branch"].isin(branches)] if branches else base
+
+    _layout = dict(
+        plot_bgcolor="white", paper_bgcolor="white",
+        margin=dict(l=0, r=0, t=36, b=0),
+    )
 
     if chart_type == "line":
         fig = px.line(
@@ -148,18 +163,34 @@ def _generate_chart(spec: dict, highlight_branch: str = None):
                 if trace.name == highlight_branch:
                     trace.line.width = 3
         fig.update_layout(
-            height=300, margin=dict(l=0, r=0, t=36, b=0),
+            height=300,
             legend=dict(orientation="h", y=-0.28, font_size=11),
-            plot_bgcolor="white", paper_bgcolor="white",
+            **_layout,
+        )
+        return fig
+
+    if chart_type == "area":
+        fig = px.area(
+            subset.sort_values("month"), x="month", y=metric, color="branch",
+            title=title or f"{label} — Trend",
+            labels={"month": "", metric: f"{label} ({unit})"},
+        )
+        if highlight_branch:
+            for trace in fig.data:
+                trace.opacity = 1.0 if trace.name == highlight_branch else 0.18
+        fig.update_layout(
+            height=300,
+            legend=dict(orientation="h", y=-0.28, font_size=11),
+            **_layout,
         )
         return fig
 
     if chart_type == "bar":
-        latest = df[df["month"] == df["month"].max()].copy()
+        snapshot = base[base["month"] == base["month"].max()].copy()
         if branches:
-            latest = latest[latest["branch"].isin(branches)]
+            snapshot = snapshot[snapshot["branch"].isin(branches)]
         fig = px.bar(
-            latest.sort_values(metric, ascending=asc),
+            snapshot.sort_values(metric, ascending=asc),
             x="branch", y=metric,
             title=title or f"{label} — Branch Comparison",
             labels={"branch": "", metric: unit},
@@ -167,13 +198,105 @@ def _generate_chart(spec: dict, highlight_branch: str = None):
             color_continuous_scale="RdYlGn_r" if asc else "RdYlGn",
         )
         fig.update_layout(
-            height=280, margin=dict(l=0, r=0, t=36, b=0),
-            plot_bgcolor="white", paper_bgcolor="white",
-            coloraxis_showscale=False, xaxis_tickangle=-30,
+            height=280, coloraxis_showscale=False, xaxis_tickangle=-30,
+            **_layout,
+        )
+        return fig
+
+    if chart_type == "ranking":
+        agg = subset.groupby("branch")[metric].mean().reset_index()
+        fig = px.bar(
+            agg.sort_values(metric, ascending=not asc),
+            x=metric, y="branch", orientation="h",
+            title=title or f"{label} — Branch Ranking",
+            labels={"branch": "", metric: f"{label} ({unit})"},
+            color=metric,
+            color_continuous_scale="RdYlGn_r" if asc else "RdYlGn",
+        )
+        fig.update_layout(
+            height=max(220, 36 * len(agg) + 60),
+            coloraxis_showscale=False, yaxis=dict(autorange="reversed"),
+            **_layout,
+        )
+        return fig
+
+    if chart_type == "scatter":
+        if not metric_y or metric_y not in df.columns:
+            return None
+        meta_y  = METRIC_META.get(metric_y, {})
+        label_y = meta_y.get("label", metric_y)
+        unit_y  = meta_y.get("unit", "")
+        agg = subset.groupby("branch")[[metric, metric_y]].mean().reset_index()
+        fig = px.scatter(
+            agg, x=metric, y=metric_y, text="branch",
+            title=title or f"{label} vs {label_y}",
+            labels={metric: f"{label} ({unit})", metric_y: f"{label_y} ({unit_y})"},
+            color="branch",
+        )
+        fig.update_traces(textposition="top center", marker_size=10)
+        fig.update_layout(
+            height=320,
+            legend=dict(orientation="h", y=-0.28, font_size=11),
+            **_layout,
+        )
+        return fig
+
+    if chart_type == "heatmap":
+        pivot = (
+            subset.groupby(["branch", subset["month"].dt.strftime("%b %Y")])[metric]
+            .mean()
+            .unstack()
+        )
+        # Keep chronological column order
+        all_months = (
+            subset["month"].drop_duplicates()
+            .sort_values()
+            .dt.strftime("%b %Y")
+            .tolist()
+        )
+        cols_ordered = [c for c in all_months if c in pivot.columns]
+        pivot = pivot[cols_ordered]
+
+        colorscale = "RdYlGn_r" if asc else "RdYlGn"
+        fig = go.Figure(go.Heatmap(
+            z=pivot.values,
+            x=pivot.columns.tolist(),
+            y=pivot.index.tolist(),
+            colorscale=colorscale,
+            hovertemplate="%{y} · %{x}<br>" + f"{label}: %{{z:.1f}} {unit}<extra></extra>",
+        ))
+        fig.update_layout(
+            title=title or f"{label} — Branch × Time Heatmap",
+            height=max(240, 36 * len(pivot) + 80),
+            xaxis=dict(tickangle=-45, tickfont_size=10),
+            **_layout,
         )
         return fig
 
     return None
+
+
+# ── Chart grid renderer ───────────────────────────────────────────────────────
+def _render_chart_grid(charts: list, highlight_branch: str = None):
+    if not charts:
+        return
+    _WIDE_TYPES = {"heatmap", "scatter", "area"}
+    grid, wide = [], []
+    for spec in charts[:6]:
+        (wide if spec.get("type") in _WIDE_TYPES else grid).append(spec)
+
+    if grid:
+        cols = st.columns(min(len(grid), 2))
+        for i, spec in enumerate(grid):
+            fig = _generate_chart(spec, highlight_branch=highlight_branch)
+            if fig:
+                with cols[i % 2]:
+                    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+    for spec in wide:
+        fig = _generate_chart(spec, highlight_branch=highlight_branch)
+        if fig:
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
 
 # ── Question pill renderer ────────────────────────────────────────────────────
@@ -206,49 +329,29 @@ def _render_deep_dive(ctx: dict):
     else:
         st.markdown(f"#### {question}")
 
-    cache_key = f"llm_{abs(hash(str(ctx)))}"
+    cache_key = f"agent_{abs(hash(str(ctx)))}"
 
     if cache_key not in st.session_state:
         try:
-            import anthropic
-            from llm import _get_api_key, TOOLS, build_prompt
+            from agents import run_analysis
+            from llm import _get_api_key
 
-            api_key = _get_api_key()
-            if api_key:
-                prompt   = build_prompt(question, df, ctx)
-                client   = anthropic.Anthropic(api_key=api_key)
-                full_text = ""
+            if _get_api_key():
                 placeholder = st.empty()
+                placeholder.markdown("_Analysing data…_ ▌")
 
-                with client.messages.stream(
-                    model="claude-sonnet-4-6",
-                    max_tokens=1000,
-                    tools=TOOLS,
-                    tool_choice={"type": "auto"},
-                    messages=[{"role": "user", "content": prompt}],
-                ) as stream:
-                    for chunk in stream.text_stream:
-                        full_text += chunk
-                        placeholder.markdown(full_text + "▌")
-                    final_msg = stream.get_final_message()
+                result = run_analysis(question, df, ctx)
 
                 placeholder.empty()
-
-                charts, follow_up = [], []
-                for block in final_msg.content:
-                    if block.type == "tool_use":
-                        if block.name == "generate_plot":
-                            charts.append(dict(block.input))
-                        elif block.name == "suggest_followup":
-                            follow_up = block.input.get("questions", [])[:3]
-
-                result = {"analysis": full_text, "charts": charts, "follow_up": follow_up}
                 st.session_state[cache_key] = result
-                st.session_state.chat_messages.append(
-                    {"role": "assistant", "content": full_text}
-                )
-                if follow_up:
-                    st.session_state.suggested_questions = follow_up
+                st.session_state.chat_messages.append({
+                    "role": "assistant",
+                    "content": result.get("analysis", ""),
+                    "charts": result.get("charts", []),
+                    "branch": branch,
+                })
+                if result.get("follow_up"):
+                    st.session_state.suggested_questions = result["follow_up"]
             else:
                 result = {"analysis": "_AI analysis requires `ANTHROPIC_API_KEY`._", "charts": [], "follow_up": []}
                 st.session_state[cache_key] = result
@@ -257,21 +360,16 @@ def _render_deep_dive(ctx: dict):
             result = {"analysis": f"_Analysis error: {e}_", "charts": [], "follow_up": []}
             st.session_state[cache_key] = result
 
-    result      = st.session_state[cache_key]
-    analysis    = result.get("analysis", str(result)) if isinstance(result, dict) else str(result)
-    charts      = result.get("charts", [])    if isinstance(result, dict) else []
-    follow_up   = result.get("follow_up", []) if isinstance(result, dict) else []
+    result    = st.session_state[cache_key]
+    analysis  = result.get("analysis", str(result)) if isinstance(result, dict) else str(result)
+    charts    = result.get("charts", [])    if isinstance(result, dict) else []
+    follow_up = result.get("follow_up", []) if isinstance(result, dict) else []
 
     st.markdown(analysis)
 
     if charts:
         st.divider()
-        cols = st.columns(min(len(charts), 2))
-        for i, spec in enumerate(charts[:4]):
-            fig = _generate_chart(spec, highlight_branch=branch or None)
-            if fig:
-                with cols[i % 2]:
-                    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        _render_chart_grid(charts, highlight_branch=branch or None)
     elif metric:
         st.divider()
         fig = _generate_chart(
@@ -480,6 +578,9 @@ with chat_col:
         avatar = "👔" if msg["role"] == "user" else "🏦"
         with st.chat_message(msg["role"], avatar=avatar):
             st.write(msg["content"] if isinstance(msg["content"], str) else msg["content"])
+            if msg["role"] == "assistant" and msg.get("charts"):
+                st.divider()
+                _render_chart_grid(msg["charts"], highlight_branch=msg.get("branch") or None)
 
     prompt = st.chat_input(
         "Ask about branch performance — e.g. 'Which branches have the worst wait times?'"

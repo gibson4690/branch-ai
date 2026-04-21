@@ -6,8 +6,12 @@ BRANCHES = ["Orchard", "Tampines", "Jurong East", "Woodlands",
             "Bishan", "Bugis", "Toa Payoh", "Clementi"]
 
 PLOT_CATALOGUE = {
-    "line": "Monthly trend over time for one metric",
-    "bar":  "Branch comparison for one metric at the latest period",
+    "line":    "Monthly trend over time for one metric",
+    "bar":     "Branch comparison for one metric at the latest period",
+    "area":    "Filled area trend over time — good for volume/demand metrics",
+    "scatter": "Correlation between two metrics across branches (requires metric_y)",
+    "heatmap": "Branch × month intensity grid — reveals patterns across time and branches",
+    "ranking": "Horizontal bar ranking all branches for one metric",
 }
 
 METRIC_META = {

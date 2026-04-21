@@ -2,3 +2,6 @@ streamlit
 plotly
 pandas
 anthropic
+langgraph
+langchain-anthropic
+langchain-core

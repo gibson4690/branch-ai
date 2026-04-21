@@ -61,6 +61,35 @@ Ensure the formatting is professional. Bullet points should have correct indenta
 
 LLM to provide 3 suggested follow up questions, to be shown in the Suggestion Questions component.
 
+#### Agentic Architecture (LangGraph)
+
+Deep dive analysis is powered by a LangGraph ReAct agent graph (`agents.py`):
+
+```
+START → prepare_context → agent_loop ⟷ tool_executor → END
+```
+
+**State** (`AnalysisState`): `question`, `context` (branch/metric from card click), `messages` (LangChain message history), `analysis_text`, `charts`, `follow_up`.
+
+**Nodes:**
+- `prepare_context` — non-LLM; pulls relevant data slices and formats a summary string for the agent
+- `analyst` (agent loop) — Claude Sonnet ReAct agent; reasons over data, writes analysis, calls tools
+- `tool_executor` — executes tool calls and returns results back into the agent loop
+
+**Tools available to the agent:**
+- `query_data` — dynamically filters the dataframe by branch/metric/time range; returns a formatted table
+- `generate_plot` — requests a chart spec (rendered by Streamlit's `_generate_chart`)
+- `suggest_followup` — signals completion and emits 3 follow-up questions
+
+**Backend LLM:** `claude-sonnet-4-6` via `langchain-anthropic` (`ChatAnthropic`).
+
+**Streaming:** `graph.stream()` events pipe text tokens into the Streamlit placeholder in real time.
+
+**Files:**
+- `agents.py` — LangGraph graph, state, nodes, tool definitions
+- `app.py` — `_render_deep_dive` calls the LangGraph graph
+- `llm.py` — retains `_get_api_key()`, `TOOLS`, `PLOT_CATALOGUE`; `build_prompt` is superseded by agent nodes
+
 ### Suggested Questions
 Suggest 3 short questions to ask. For each question, make it a clickable button that will populate the chatbox and send the question when clicked. The buttons should be highlighted when the mouse hovers above it.
 
@@ -69,5 +98,4 @@ If no questions have been asked yet, show 3 default short questions. Otherwise, 
 ## Data
 
 Create mock data used for the app. Assume the bank is UOSB, a local bank in Singapore. Data range from Jan 2024 to Mar 2026. Data include performance related metrics such as average wait time and handling times. Queue data such as queue token count and missed queue count. Demand side metrics such as transactions and customer demographics and types (e.g. customer aged 60, corporate clients). Supply side metrics such as counter utilisation and staff count by staff seniority (seedling, sapling, mature tree).
-
 
