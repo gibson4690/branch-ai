@@ -1,3 +1,4 @@
+import re
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -276,27 +277,48 @@ def _generate_chart(spec: dict, highlight_branch: str = None):
     return None
 
 
-# ── Chart grid renderer ───────────────────────────────────────────────────────
-def _render_chart_grid(charts: list, highlight_branch: str = None):
+# ── Inline analysis + chart renderer ─────────────────────────────────────────
+def _render_inline_analysis(analysis: str, charts: dict, highlight_branch: str = None):
+    """Render analysis text with [CHART:id] markers replaced by inline charts.
+    Any charts not referenced by a marker are appended at the end."""
     if not charts:
+        st.markdown(analysis)
         return
-    _WIDE_TYPES = {"heatmap", "scatter", "area"}
-    grid, wide = [], []
-    for spec in charts[:6]:
-        (wide if spec.get("type") in _WIDE_TYPES else grid).append(spec)
 
-    if grid:
-        cols = st.columns(min(len(grid), 2))
-        for i, spec in enumerate(grid):
-            fig = _generate_chart(spec, highlight_branch=highlight_branch)
-            if fig:
-                with cols[i % 2]:
+    parts = re.split(r'\[CHART:(\w+)\]', analysis)
+    rendered_ids = set()
+
+    # parts alternates: text_segment, chart_id, text_segment, chart_id, ...
+    for i, part in enumerate(parts):
+        if i % 2 == 0:
+            if part.strip():
+                st.markdown(part)
+        else:
+            spec = charts.get(part)
+            rendered_ids.add(part)
+            if spec:
+                fig = _generate_chart(spec, highlight_branch=highlight_branch)
+                if fig:
                     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
-    for spec in wide:
-        fig = _generate_chart(spec, highlight_branch=highlight_branch)
-        if fig:
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    # Append any charts the LLM didn't place a marker for
+    leftover = [s for cid, s in charts.items() if cid not in rendered_ids]
+    if leftover:
+        st.divider()
+        _WIDE_TYPES = {"heatmap", "scatter", "area"}
+        grid = [s for s in leftover if s.get("type") not in _WIDE_TYPES]
+        wide = [s for s in leftover if s.get("type") in _WIDE_TYPES]
+        if grid:
+            cols = st.columns(min(len(grid), 2))
+            for i, spec in enumerate(grid):
+                fig = _generate_chart(spec, highlight_branch=highlight_branch)
+                if fig:
+                    with cols[i % 2]:
+                        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        for spec in wide:
+            fig = _generate_chart(spec, highlight_branch=highlight_branch)
+            if fig:
+                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
 
 # ── Question pill renderer ────────────────────────────────────────────────────
@@ -347,29 +369,26 @@ def _render_deep_dive(ctx: dict):
                 st.session_state.chat_messages.append({
                     "role": "assistant",
                     "content": result.get("analysis", ""),
-                    "charts": result.get("charts", []),
+                    "charts": result.get("charts", {}),
                     "branch": branch,
                 })
                 if result.get("follow_up"):
                     st.session_state.suggested_questions = result["follow_up"]
             else:
-                result = {"analysis": "_AI analysis requires `ANTHROPIC_API_KEY`._", "charts": [], "follow_up": []}
+                result = {"analysis": "_AI analysis requires `ANTHROPIC_API_KEY`._", "charts": {}, "follow_up": []}
                 st.session_state[cache_key] = result
 
         except Exception as e:
-            result = {"analysis": f"_Analysis error: {e}_", "charts": [], "follow_up": []}
+            result = {"analysis": f"_Analysis error: {e}_", "charts": {}, "follow_up": []}
             st.session_state[cache_key] = result
 
     result    = st.session_state[cache_key]
     analysis  = result.get("analysis", str(result)) if isinstance(result, dict) else str(result)
-    charts    = result.get("charts", [])    if isinstance(result, dict) else []
+    charts    = result.get("charts", {})    if isinstance(result, dict) else {}
     follow_up = result.get("follow_up", []) if isinstance(result, dict) else []
 
-    st.markdown(analysis)
-
     if charts:
-        st.divider()
-        _render_chart_grid(charts, highlight_branch=branch or None)
+        _render_inline_analysis(analysis, charts, highlight_branch=branch or None)
     elif metric:
         st.divider()
         fig = _generate_chart(
@@ -577,10 +596,14 @@ with chat_col:
     for msg in st.session_state.chat_messages[-4:]:
         avatar = "👔" if msg["role"] == "user" else "🏦"
         with st.chat_message(msg["role"], avatar=avatar):
-            st.write(msg["content"] if isinstance(msg["content"], str) else msg["content"])
             if msg["role"] == "assistant" and msg.get("charts"):
-                st.divider()
-                _render_chart_grid(msg["charts"], highlight_branch=msg.get("branch") or None)
+                _render_inline_analysis(
+                    msg["content"],
+                    msg["charts"],
+                    highlight_branch=msg.get("branch") or None,
+                )
+            else:
+                st.write(msg["content"] if isinstance(msg["content"], str) else msg["content"])
 
     prompt = st.chat_input(
         "Ask about branch performance — e.g. 'Which branches have the worst wait times?'"

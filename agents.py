@@ -23,7 +23,7 @@ class AnalysisState(TypedDict):
     data_summary: str                      # pre-formatted for the agent
     messages: Annotated[list, add_messages]
     analysis_text: str
-    charts: list
+    charts: dict                           # {chart_id: spec}
     follow_up: list
 
 
@@ -76,6 +76,7 @@ def query_data(
 
 @tool
 def generate_plot(
+    chart_id: str,
     type: str,
     metric: str,
     title: str,
@@ -83,17 +84,21 @@ def generate_plot(
     metric_y: str | None = None,
     months_back: int | None = None,
 ) -> str:
-    """Request a chart to be rendered. Call up to 4 times for the most insightful charts.
+    """Request a chart to be rendered inline in the analysis.
+
+    IMPORTANT: You must place the marker [CHART:chart_id] in your analysis text
+    exactly where this chart should appear — right after the sentence that refers to it.
 
     Chart types:
       line    — monthly trend over time for one metric
       bar     — branch comparison at the latest period
       area    — filled area trend; good for volume/demand metrics
       scatter — correlation between metric (x-axis) and metric_y (y-axis) across branches
-      heatmap — branch × month intensity grid; reveals patterns across time
+      heatmap — branch × month intensity grid; reveals patterns across time and branches
       ranking — horizontal bar ranking all branches for one metric
 
     Args:
+        chart_id: Unique ID, e.g. "chart_1", "chart_2". Must match the [CHART:chart_id] marker in your text.
         type: Chart type from the catalogue above.
         metric: Primary metric column (x-axis for scatter).
         title: Descriptive chart title.
@@ -106,6 +111,7 @@ def generate_plot(
     if type == "scatter" and metric_y and metric_y not in _CHARTABLE:
         return f"Cannot plot '{metric_y}'. Choose from: {', '.join(_CHARTABLE)}"
     return json.dumps({
+        "chart_id": chart_id,
         "type": type,
         "metric": metric,
         "title": title,
@@ -180,11 +186,15 @@ def prepare_context(state: AnalysisState) -> dict:
         "  - Recommendation 1\n"
         "  - Recommendation 2\n"
         "  - Recommendation 3\n\n"
-        "Use query_data to fetch the specific data you need before forming conclusions.\n"
-        "Call generate_plot 2–4 times to visually support your findings — choose chart types that best "
-        "illustrate the analysis: use scatter to show correlations between metrics, heatmap to show "
-        "patterns across branches and time, area for volume trends, ranking to compare all branches. "
-        "Match the branches and months_back to the data you actually queried. "
+        "Use query_data to fetch the specific data you need before forming conclusions.\n\n"
+        "Call generate_plot 2–4 times to visually support your findings. "
+        "IMPORTANT: place the marker [CHART:chart_id] in your analysis text right after the sentence "
+        "that the chart supports — so the chart appears inline next to the relevant finding. "
+        "For example, write '...Toa Payoh has the highest wait time at 18.5 min. [CHART:chart_1]' "
+        "and call generate_plot with chart_id='chart_1'. "
+        "Choose chart types that best fit: scatter for correlations, heatmap for branch×time patterns, "
+        "area for volume trends, ranking to compare all branches. "
+        "Match branches and months_back to the data you queried. "
         "Always end by calling suggest_followup with 3 short follow-up questions."
     )
 
@@ -193,7 +203,7 @@ def prepare_context(state: AnalysisState) -> dict:
         "messages": [
             HumanMessage(content=f"System context:\n{system}\n\nQuestion: {state['question']}")
         ],
-        "charts": [],
+        "charts": {},
         "follow_up": [],
         "analysis_text": "",
     }
@@ -219,8 +229,8 @@ def tool_executor(state: AnalysisState) -> dict:
         return {}
 
     tool_messages = []
-    new_charts = list(state.get("charts", []))
-    new_followup = list(state.get("follow_up", []))
+    new_charts = dict(state.get("charts") or {})
+    new_followup = list(state.get("follow_up") or [])
 
     for tc in last.tool_calls:
         tool_fn = TOOL_MAP.get(tc["name"])
@@ -232,11 +242,11 @@ def tool_executor(state: AnalysisState) -> dict:
             except Exception as e:
                 result = f"Tool error: {e}"
 
-        # Capture chart specs and follow-up questions
         if tc["name"] == "generate_plot":
             try:
                 spec = json.loads(result) if isinstance(result, str) else result
-                new_charts.append(spec)
+                cid = spec.get("chart_id") or f"chart_{len(new_charts) + 1}"
+                new_charts[cid] = spec
             except (json.JSONDecodeError, TypeError):
                 pass
         elif tc["name"] == "suggest_followup":
@@ -325,7 +335,7 @@ def run_analysis(question: str, df: pd.DataFrame, ctx: dict | None = None) -> di
         "messages": [],
         "data_summary": "",
         "analysis_text": "",
-        "charts": [],
+        "charts": {},
         "follow_up": [],
     })
 
