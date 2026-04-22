@@ -110,6 +110,6 @@ def compute_highlights(df: pd.DataFrame):
             })
 
     df_i = pd.DataFrame(rows)
-    positives = df_i[df_i["good_score"] > 0].nlargest(4, "good_score").to_dict("records")
-    negatives = df_i[df_i["good_score"] < 0].nsmallest(4, "good_score").to_dict("records")
+    positives = df_i[df_i["good_score"] > 0].nlargest(3, "good_score").to_dict("records")
+    negatives = df_i[df_i["good_score"] < 0].nsmallest(3, "good_score").to_dict("records")
     return positives, negatives

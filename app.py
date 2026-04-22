@@ -17,7 +17,7 @@ st.markdown("""
 <style>
   [data-testid="stAppViewContainer"] > .main { background: #f7f8fc; }
   [data-testid="stHeader"] { display: none !important; }
-  [data-testid="block-container"] { padding-top: 78px !important; }
+  [data-testid="block-container"] { padding-top: 13px !important; }
 
   div[data-testid="stHorizontalBlock"] { align-items: flex-start; }
 
@@ -78,6 +78,7 @@ st.markdown("""
   /* ── 3D insight cards ── */
   div[data-testid="stVerticalBlockBorderWrapper"] {
     box-shadow: 0 4px 12px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.08) !important;
+    border: 1px solid #e5e7eb !important;
     border-radius: 12px !important;
     transition: transform 0.15s ease, box-shadow 0.15s ease !important;
     cursor: pointer !important;
@@ -88,13 +89,36 @@ st.markdown("""
     transform: translateY(-3px) !important;
     box-shadow: 0 8px 24px rgba(0,0,0,0.14), 0 2px 6px rgba(0,0,0,0.10) !important;
   }
+  /* Tight gap between stacked insight cards */
+  div[data-testid="element-container"]:has(> div[data-testid="stVerticalBlockBorderWrapper"]) {
+    margin-bottom: -0.6rem !important;
+  }
+  /* Uniform padding inside bordered card */
+  div[data-testid="stVerticalBlockBorderWrapper"] > div[data-testid="stVerticalBlock"] {
+    padding: 0.6rem !important;
+  }
+  div[data-testid="stVerticalBlockBorderWrapper"] > div[data-testid="stVerticalBlock"] > div:first-child {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+  div[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stHorizontalBlock"] {
+    align-items: flex-start !important;
+  }
   div[data-testid="stVerticalBlockBorderWrapper"] .stButton {
-    height: 0 !important; overflow: hidden !important;
-    margin: 0 !important; padding: 0 !important;
+    display: flex !important; align-items: center !important;
+    justify-content: center !important; height: 100% !important;
   }
   div[data-testid="stVerticalBlockBorderWrapper"] .stButton button {
-    height: 0 !important; min-height: 0 !important; width: 0 !important;
-    padding: 0 !important; opacity: 0 !important; border: none !important;
+    width: 30px !important; height: 30px !important; min-height: 30px !important;
+    padding: 0 !important; opacity: 1 !important;
+    background: #f3f4f6 !important; border: 1px solid #e5e7eb !important;
+    border-radius: 8px !important; color: #9ca3af !important;
+    font-size: 0.85rem !important; line-height: 1 !important;
+    transition: background 0.15s, color 0.15s, border-color 0.15s !important;
+  }
+  div[data-testid="stVerticalBlockBorderWrapper"] .stButton button:hover {
+    background: #e0e7ff !important; color: #4f46e5 !important;
+    border-color: #c7d2fe !important;
   }
 
   /* ── Suggested question pill buttons ── */
@@ -540,8 +564,6 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ── Highlights — 60 % page width ─────────────────────────────────────────────
-st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
-
 _, highlights_col, _ = st.columns([2, 6, 2])
 with highlights_col:
     col_pos, col_neg = st.columns(2, gap="large")
@@ -552,14 +574,14 @@ def _render_cards(insights: list, is_positive: bool, col):
     fill   = "rgba(22,163,74,0.07)" if is_positive else "rgba(220,38,38,0.07)"
     hdr_bg = "#f0fdf4" if is_positive else "#fef2f2"
     bdr    = "#d1fae5" if is_positive else "#fee2e2"
-    title  = "Top Positive Highlights" if is_positive else "Top Negative Highlights"
+    title  = "Top Positive Highlights" if is_positive else "Top Negative Alerts"
     arrow  = "↑" if is_positive else "↓"
 
     with col:
         st.markdown(f"""
         <div style="background:{hdr_bg};border:1px solid {bdr};border-radius:8px;
-                    padding:0.5rem 1rem;font-size:0.8rem;font-weight:700;color:{lc};
-                    letter-spacing:0.05em;text-transform:uppercase;margin-bottom:0.9rem;">
+                    padding:0.1rem;font-size:0.8rem;font-weight:700;color:{lc};
+                    letter-spacing:0.05em;text-transform:uppercase;margin-bottom:0.5rem;">
             {arrow}&nbsp; {title}
         </div>""", unsafe_allow_html=True)
 
@@ -570,34 +592,26 @@ def _render_cards(insights: list, is_positive: bool, col):
             verb  = ("decreased" if pct < 0 else "increased") if lib else ("increased" if pct > 0 else "decreased")
 
             with st.container(border=True):
-                st.markdown(f"""
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem;">
-                  <div>
-                    <span style="font-weight:600;font-size:0.85rem;color:#111;">{ins['label']}</span>
-                    <span style="font-size:0.78rem;color:#888;margin-left:0.5rem;">{ins['branch']}</span>
-                  </div>
-                  <span style="background:{lc};color:#fff;border-radius:12px;
-                               padding:1px 9px;font-size:0.75rem;font-weight:600;">{badge}</span>
-                </div>""", unsafe_allow_html=True)
-
-                c_text, c_chart = st.columns([4, 2])
+                c_text, c_chart, c_btn = st.columns([4, 2, 1], vertical_alignment="top")
                 with c_text:
+                    st.markdown(f"""<div style="display:flex;align-items:center;padding:0.1rem;margin:0.1rem;">
+                        <span style="font-weight:600;font-size:0.85rem;color:#111;">{ins['label']}</span>
+                        <span style="font-size:0.78rem;color:#888;margin-left:0.5rem;">{ins['branch']}</span>
+                        </div>""", unsafe_allow_html=True)
                     st.markdown(
-                        f"<p style='font-size:0.8rem;color:#444;line-height:1.5;margin:0;'>"
+                        f"<p style='font-size:0.8rem;color:#444;line-height:1.5;margin:0.1rem;'>"
                         f"{ins['branch']} <b>{ins['label'].lower()}</b> has {verb} "
                         f"<b>{abs(pct):.1f}%</b>, now at <b>{ins['current']:.1f} {ins['unit']}</b>.</p>",
                         unsafe_allow_html=True,
                     )
-                    # Hidden trigger — entire card is wired via JS below
-                    if st.button("▶", key=f"btn_{ins['branch']}_{ins['metric']}"):
-                        st.session_state.pending_analysis = {
-                            "question": f"Analyse {ins['label']} performance at {ins['branch']} branch",
-                            "branch":   ins["branch"],
-                            "metric":   ins["metric"],
-                        }
-                        st.session_state._scroll_to_chat = True
-                        st.rerun()
                 with c_chart:
+                    st.markdown(
+                        f"<div style='text-align:center;margin-bottom:0.1rem;'>"
+                        f"<span style='background:{lc};color:#fff;border-radius:10px;"
+                        f"padding:1px 8px;font-size:0.72rem;font-weight:700;'>{badge}</span>"
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
                     branch_vals = (
                         df[df["branch"] == ins["branch"]]
                         .sort_values("month")[ins["metric"]]
@@ -608,8 +622,16 @@ def _render_cards(insights: list, is_positive: bool, col):
                         use_container_width=True,
                         config={"displayModeBar": False},
                     )
+                with c_btn:
+                    if st.button("→", key=f"btn_{ins['branch']}_{ins['metric']}"):
+                        st.session_state.pending_analysis = {
+                            "question": f"Analyse {ins['label']} performance at {ins['branch']} branch",
+                            "branch":   ins["branch"],
+                            "metric":   ins["metric"],
+                        }
+                        st.session_state._scroll_to_chat = True
+                        st.rerun()
 
-            st.markdown("<div style='height:0.35rem'></div>", unsafe_allow_html=True)
 
 
 _render_cards(positives, True,  col_pos)
