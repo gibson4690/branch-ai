@@ -16,28 +16,66 @@ st.set_page_config(
 st.markdown("""
 <style>
   [data-testid="stAppViewContainer"] > .main { background: #f7f8fc; }
-  /* Hide Streamlit's native header — we use our own fixed banner */
   [data-testid="stHeader"] { display: none !important; }
-  /* Push page content below the fixed banner */
   [data-testid="block-container"] { padding-top: 78px !important; }
-
-  /* Chat input */
-  [data-testid="stChatInput"] {
-    border-radius: 14px !important;
-    border: 1.5px solid #e5e7eb !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06) !important;
-    background: #fff !important;
-  }
-  [data-testid="stChatInput"]:focus-within {
-    border-color: #4f46e5 !important;
-    box-shadow: 0 0 0 3px rgba(79,70,229,0.10) !important;
-  }
-  [data-testid="stChatInput"] textarea { font-size: 0.9rem !important; }
-  [data-testid="stChatInput"] button { border-radius: 10px !important; background: #4f46e5 !important; }
 
   div[data-testid="stHorizontalBlock"] { align-items: flex-start; }
 
-  /* 3D insight cards */
+  /* ── Custom chat form (replaces st.chat_input) ── */
+  div[data-testid="stForm"] {
+    background: #fff !important;
+    border: 1.5px solid #e5e7eb !important;
+    border-radius: 16px !important;
+    padding: 0.15rem 0.35rem 0.15rem 0.9rem !important;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.055) !important;
+    transition: border-color 0.15s, box-shadow 0.15s !important;
+    margin-top: 0.6rem !important;
+  }
+  div[data-testid="stForm"]:focus-within {
+    border-color: #4f46e5 !important;
+    box-shadow: 0 0 0 3px rgba(79,70,229,0.09) !important;
+  }
+  div[data-testid="stForm"] input[type="text"] {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    font-size: 0.9rem !important;
+    padding: 0.45rem 0 !important;
+    color: #111827 !important;
+  }
+  div[data-testid="stForm"] input[type="text"]::placeholder { color: #9ca3af !important; }
+  div[data-testid="stForm"] label { display: none !important; }
+  div[data-testid="stForm"] [data-testid="stFormSubmitButton"] > button {
+    background: linear-gradient(135deg, #4f46e5, #7c3aed) !important;
+    color: #fff !important;
+    border: none !important;
+    border-radius: 11px !important;
+    height: 38px !important;
+    width: 38px !important;
+    min-height: 38px !important;
+    padding: 0 !important;
+    font-size: 1.05rem !important;
+    line-height: 1 !important;
+    box-shadow: 0 2px 8px rgba(79,70,229,0.22) !important;
+    transition: opacity 0.15s, box-shadow 0.15s !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+  div[data-testid="stForm"] [data-testid="stFormSubmitButton"] > button:hover {
+    opacity: 0.88 !important;
+    box-shadow: 0 4px 14px rgba(79,70,229,0.32) !important;
+  }
+  div[data-testid="stForm"] [data-testid="stFormSubmitButton"] > button:focus {
+    box-shadow: 0 0 0 3px rgba(79,70,229,0.2) !important;
+  }
+  /* Keep columns inside the form vertically centred */
+  div[data-testid="stForm"] [data-testid="stHorizontalBlock"] {
+    align-items: center !important;
+    gap: 0.3rem !important;
+  }
+
+  /* ── 3D insight cards ── */
   div[data-testid="stVerticalBlockBorderWrapper"] {
     box-shadow: 0 4px 12px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.08) !important;
     border-radius: 12px !important;
@@ -50,7 +88,6 @@ st.markdown("""
     transform: translateY(-3px) !important;
     box-shadow: 0 8px 24px rgba(0,0,0,0.14), 0 2px 6px rgba(0,0,0,0.10) !important;
   }
-  /* Hide card trigger button — click wired via JS */
   div[data-testid="stVerticalBlockBorderWrapper"] .stButton {
     height: 0 !important; overflow: hidden !important;
     margin: 0 !important; padding: 0 !important;
@@ -60,7 +97,7 @@ st.markdown("""
     padding: 0 !important; opacity: 0 !important; border: none !important;
   }
 
-  /* Question / follow-up pill buttons */
+  /* ── Suggested question pill buttons ── */
   .stButton button[kind="primary"] {
     background: #f8f9ff !important;
     border: 1.5px solid #c7d2fe !important;
@@ -82,20 +119,14 @@ st.markdown("""
     transform: translateY(-1px) !important;
   }
 
-  /* Analysis text formatting */
-  [data-testid="stChatMessage"] ul, [data-testid="stChatMessage"] ol {
+  /* ── Analysis content typography ── */
+  .analysis-body ul, .analysis-body ol {
     margin-left: 1.4rem !important;
     margin-top: 0.3rem !important;
     margin-bottom: 0.5rem !important;
   }
-  [data-testid="stChatMessage"] li {
-    margin-bottom: 0.3rem !important;
-    line-height: 1.7 !important;
-  }
-  [data-testid="stChatMessage"] p {
-    margin-bottom: 0.55rem !important;
-    line-height: 1.65 !important;
-  }
+  .analysis-body li { margin-bottom: 0.3rem !important; line-height: 1.7 !important; }
+  .analysis-body p  { margin-bottom: 0.55rem !important; line-height: 1.65 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -609,60 +640,139 @@ st.markdown("<div style='height:1.6rem'></div>", unsafe_allow_html=True)
 
 _, chat_col, _ = st.columns([2, 6, 2])
 
+# ── Helpers for custom message bubbles ───────────────────────────────────────
+_USER_BUBBLE = """
+<div style="display:flex;justify-content:flex-end;margin:0.55rem 0 0.2rem;">
+  <div style="background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;
+              border-radius:18px 18px 4px 18px;padding:0.7rem 1.05rem;
+              max-width:78%;font-size:0.875rem;line-height:1.55;
+              box-shadow:0 2px 10px rgba(79,70,229,0.18);">
+    {content}
+  </div>
+</div>"""
+
+_AI_HEADER = """
+<div style="display:flex;align-items:center;gap:0.45rem;margin:0.9rem 0 0.25rem;">
+  <div style="width:27px;height:27px;border-radius:8px;flex-shrink:0;
+              background:linear-gradient(135deg,#4f46e5,#7c3aed);
+              display:flex;align-items:center;justify-content:center;font-size:13px;">🏦</div>
+  <span style="font-size:0.74rem;font-weight:700;color:#6b7280;letter-spacing:0.04em;
+               text-transform:uppercase;">Branch.ai</span>
+  {badge}
+</div>"""
+
+_AI_BUBBLE = """
+<div style="margin-left:36px;background:#fff;border:1px solid #eaecf0;
+            border-radius:4px 16px 16px 16px;padding:0.8rem 1.05rem;
+            box-shadow:0 1px 4px rgba(0,0,0,0.05);font-size:0.875rem;
+            line-height:1.6;color:#1f2937;margin-bottom:0.3rem;">
+  {content}
+</div>"""
+
+def _ai_header(badge_label: str = "", badge_color: str = "#7c3aed") -> str:
+    badge = (
+        f'<span style="background:{badge_color};color:#fff;border-radius:8px;'
+        f'padding:1px 7px;font-size:0.68rem;font-weight:600;">{badge_label}</span>'
+        if badge_label else ""
+    )
+    return _AI_HEADER.format(badge=badge)
+
+def _render_analysis_block(content: str, charts: dict, branch: str = ""):
+    """Avatar header + analysis with inline charts (no HTML wrapper — Streamlit renders charts)."""
+    mode = st.session_state.get("agent_mode", "Multi-Agent")
+    badge = "Multi-Agent" if mode == "Multi-Agent" else "ReAct"
+    badge_color = "#7c3aed" if mode == "Multi-Agent" else "#4f46e5"
+    st.markdown(_ai_header(badge, badge_color), unsafe_allow_html=True)
+    with st.container():
+        st.markdown('<div class="analysis-body">', unsafe_allow_html=True)
+        _render_inline_analysis(content, charts, highlight_branch=branch or None)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+
 with chat_col:
-    _active_mode = st.session_state.get("agent_mode", "ReAct Agent")
+    _active_mode = st.session_state.get("agent_mode", "Multi-Agent")
     _mode_badge_color = "#7c3aed" if _active_mode == "Multi-Agent" else "#4f46e5"
     _mode_label = "Multi-Agent" if _active_mode == "Multi-Agent" else "ReAct"
+
+    # ── Section header ────────────────────────────────────────────────────────
     st.markdown(f"""
-    <div id="chat-section" style="display:flex;align-items:center;gap:0.55rem;margin-bottom:0.5rem;">
-      <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24"
-           fill="none" stroke="#4f46e5" stroke-width="2.2"
-           stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-      </svg>
-      <span style="font-size:0.92rem;font-weight:700;color:#111827;letter-spacing:-0.01em;">
-        Ask the Data
-      </span>
-      <span style="font-size:0.8rem;color:#9ca3af;">— powered by Branch.ai</span>
+    <div id="chat-section" style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.9rem;">
+      <div style="width:34px;height:34px;border-radius:10px;flex-shrink:0;
+                  background:linear-gradient(135deg,#4f46e5,#7c3aed);
+                  display:flex;align-items:center;justify-content:center;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+             fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+      </div>
+      <div>
+        <div style="font-size:0.95rem;font-weight:800;color:#111827;letter-spacing:-0.02em;line-height:1.15;">
+          Ask the Data
+        </div>
+        <div style="font-size:0.71rem;color:#9ca3af;margin-top:0.05rem;">powered by Branch.ai</div>
+      </div>
       <span style="margin-left:auto;background:{_mode_badge_color};color:#fff;
-                   border-radius:10px;padding:1px 9px;font-size:0.72rem;font-weight:600;
-                   letter-spacing:0.03em;">{_mode_label}</span>
+                   border-radius:10px;padding:2px 10px;font-size:0.71rem;font-weight:700;
+                   letter-spacing:0.04em;text-transform:uppercase;">{_mode_label}</span>
     </div>
     """, unsafe_allow_html=True)
 
-    for msg in st.session_state.chat_messages[-4:]:
-        avatar = "👔" if msg["role"] == "user" else "🏦"
-        with st.chat_message(msg["role"], avatar=avatar):
-            if msg["role"] == "assistant" and msg.get("charts"):
-                _render_inline_analysis(
-                    msg["content"],
-                    msg["charts"],
-                    highlight_branch=msg.get("branch") or None,
-                )
+    # ── Message history ───────────────────────────────────────────────────────
+    for msg in st.session_state.chat_messages[-6:]:
+        if msg["role"] == "user":
+            st.markdown(
+                _USER_BUBBLE.format(content=msg["content"]),
+                unsafe_allow_html=True,
+            )
+        else:
+            content = msg.get("content", "")
+            charts  = msg.get("charts", {})
+            branch  = msg.get("branch", "")
+            if charts:
+                _render_analysis_block(content, charts, branch)
             else:
-                st.write(msg["content"] if isinstance(msg["content"], str) else msg["content"])
+                st.markdown(_ai_header(), unsafe_allow_html=True)
+                st.markdown(
+                    _AI_BUBBLE.format(content=content),
+                    unsafe_allow_html=True,
+                )
 
-    prompt = st.chat_input(
-        "Ask about branch performance — e.g. 'Which branches have the worst wait times?'"
-    )
-    if prompt:
-        st.session_state.chat_messages.append({"role": "user", "content": prompt})
-        st.session_state.pending_analysis = {"question": prompt}
+    # ── Deep dive — rendered HERE, before input & suggestions ─────────────────
+    if st.session_state.pending_analysis:
+        ctx = st.session_state.pending_analysis
+        mode = st.session_state.get("agent_mode", "Multi-Agent")
+        badge = "Multi-Agent" if mode == "Multi-Agent" else "ReAct"
+        badge_color = "#7c3aed" if mode == "Multi-Agent" else "#4f46e5"
+        st.markdown(_ai_header(badge, badge_color), unsafe_allow_html=True)
+        with st.container():
+            st.markdown('<div class="analysis-body">', unsafe_allow_html=True)
+            _render_deep_dive(ctx)
+            st.markdown('</div>', unsafe_allow_html=True)
+        st.session_state.pending_analysis = None
+        st.rerun()
+
+    # ── Custom input bar ──────────────────────────────────────────────────────
+    with st.form("chat_input_form", clear_on_submit=True):
+        col_txt, col_btn = st.columns([11, 1])
+        with col_txt:
+            user_input = st.text_input(
+                "chat",
+                placeholder="Ask about branch performance — e.g. 'Which branches have the worst wait times?'",
+                label_visibility="collapsed",
+            )
+        with col_btn:
+            submitted = st.form_submit_button("↑", use_container_width=True)
+
+    if submitted and user_input.strip():
+        st.session_state.chat_messages.append({"role": "user", "content": user_input.strip()})
+        st.session_state.pending_analysis = {"question": user_input.strip()}
         st.session_state._scroll_to_chat = True
         st.rerun()
 
-    # ── Suggested Questions — always below the chat input ─────────────────────
+    # ── Suggested questions ───────────────────────────────────────────────────
     _sq_label = "Quick questions" if not st.session_state.chat_messages else "Suggested follow-ups"
     _sq_key   = f"sq_{abs(hash(tuple(st.session_state.suggested_questions)))}"
     _render_question_pills(st.session_state.suggested_questions, key_prefix=_sq_key, label=_sq_label)
-
-    # ── Deep dive ─────────────────────────────────────────────────────────────
-    if st.session_state.pending_analysis:
-        ctx = st.session_state.pending_analysis
-        with st.chat_message("assistant", avatar="🏦"):
-            _render_deep_dive(ctx)
-        st.session_state.pending_analysis = None
-        st.rerun()  # refresh Suggested Questions with LLM follow-ups
 
 # Scroll to chat section after card click or question submission
 if st.session_state.get("_scroll_to_chat"):
