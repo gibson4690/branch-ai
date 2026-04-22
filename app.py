@@ -115,9 +115,32 @@ for key, default in [
     ("pending_analysis", None),
     ("_scroll_to_chat", False),
     ("suggested_questions", _DEFAULT_QUESTIONS),
+    ("agent_mode", "Multi-Agent"),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
+
+# ── Sidebar: agent architecture toggle ───────────────────────────────────────
+def _on_agent_mode_change():
+    for k in [k for k in st.session_state if k.startswith("agent_cache_")]:
+        del st.session_state[k]
+
+with st.sidebar:
+    st.markdown("### Agent Architecture")
+    st.radio(
+        "Analysis engine:",
+        options=["ReAct Agent", "Multi-Agent"],
+        key="agent_mode",
+        on_change=_on_agent_mode_change,
+        help="Switch between the single ReAct agent and the new multi-agent pipeline.",
+    )
+    if st.session_state.agent_mode == "ReAct Agent":
+        st.caption("Single analyst agent with query, plot, and follow-up tools.")
+    else:
+        st.caption(
+            "DataConcierge → DataEngineer → DataAnalyst → Executive — "
+            "creates an analysis plan, queries data per insight, then synthesises an executive summary."
+        )
 
 
 # ── Chart helper ──────────────────────────────────────────────────────────────
@@ -351,18 +374,26 @@ def _render_deep_dive(ctx: dict):
     else:
         st.markdown(f"#### {question}")
 
-    cache_key = f"agent_{abs(hash(str(ctx)))}"
+    mode = st.session_state.get("agent_mode", "ReAct Agent")
+    cache_key = f"agent_cache_{mode}_{abs(hash(str(ctx)))}"
 
     if cache_key not in st.session_state:
         try:
-            from agents import run_analysis
             from llm import _get_api_key
 
             if _get_api_key():
                 placeholder = st.empty()
-                placeholder.markdown("_Analysing data…_ ▌")
 
-                result = run_analysis(question, df, ctx)
+                if mode == "Multi-Agent":
+                    placeholder.markdown(
+                        "_Running multi-agent pipeline: DataConcierge → DataEngineer → DataAnalyst → Executive…_ ▌"
+                    )
+                    from agents_v2 import run_analysis_v2
+                    result = run_analysis_v2(question, df, ctx)
+                else:
+                    placeholder.markdown("_Analysing data…_ ▌")
+                    from agents import run_analysis
+                    result = run_analysis(question, df, ctx)
 
                 placeholder.empty()
                 st.session_state[cache_key] = result
@@ -579,7 +610,10 @@ st.markdown("<div style='height:1.6rem'></div>", unsafe_allow_html=True)
 _, chat_col, _ = st.columns([2, 6, 2])
 
 with chat_col:
-    st.markdown("""
+    _active_mode = st.session_state.get("agent_mode", "ReAct Agent")
+    _mode_badge_color = "#7c3aed" if _active_mode == "Multi-Agent" else "#4f46e5"
+    _mode_label = "Multi-Agent" if _active_mode == "Multi-Agent" else "ReAct"
+    st.markdown(f"""
     <div id="chat-section" style="display:flex;align-items:center;gap:0.55rem;margin-bottom:0.5rem;">
       <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24"
            fill="none" stroke="#4f46e5" stroke-width="2.2"
@@ -590,6 +624,9 @@ with chat_col:
         Ask the Data
       </span>
       <span style="font-size:0.8rem;color:#9ca3af;">— powered by Branch.ai</span>
+      <span style="margin-left:auto;background:{_mode_badge_color};color:#fff;
+                   border-radius:10px;padding:1px 9px;font-size:0.72rem;font-weight:600;
+                   letter-spacing:0.03em;">{_mode_label}</span>
     </div>
     """, unsafe_allow_html=True)
 
