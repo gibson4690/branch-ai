@@ -180,22 +180,6 @@ def _on_agent_mode_change():
     for k in [k for k in st.session_state if k.startswith("agent_cache_")]:
         del st.session_state[k]
 
-with st.sidebar:
-    st.markdown("### Agent Architecture")
-    st.radio(
-        "Analysis engine:",
-        options=["ReAct Agent", "Multi-Agent"],
-        key="agent_mode",
-        on_change=_on_agent_mode_change,
-        help="Switch between the single ReAct agent and the new multi-agent pipeline.",
-    )
-    if st.session_state.agent_mode == "ReAct Agent":
-        st.caption("Single analyst agent with query, plot, and follow-up tools.")
-    else:
-        st.caption(
-            "DataConcierge → DataEngineer → DataAnalyst → Executive — "
-            "creates an analysis plan, queries data per insight, then synthesises an executive summary."
-        )
 
 
 # ── Chart helper ──────────────────────────────────────────────────────────────
@@ -445,6 +429,12 @@ def _render_deep_dive(ctx: dict):
                     )
                     from agents_v2 import run_analysis_v2
                     result = run_analysis_v2(question, df, ctx)
+                elif mode == "V3 Agent":
+                    placeholder.markdown(
+                        "_Running V3 pipeline: Concierge → DataAnalyst → DataEngineer → DataAnalyst…_ ▌"
+                    )
+                    from agents_v3 import run_analysis_v3
+                    result = run_analysis_v3(question, df, ctx)
                 else:
                     placeholder.markdown("_Analysing data…_ ▌")
                     from agents import run_analysis
@@ -657,8 +647,19 @@ st.markdown("""
 })();
 </script>""", unsafe_allow_html=True)
 
+# ── Agent selector ────────────────────────────────────────────────────────────
+_, agent_sel_col, _ = st.columns([2, 6, 2])
+with agent_sel_col:
+    st.selectbox(
+        "Analysis engine:",
+        options=["ReAct Agent", "Multi-Agent", "V3 Agent"],
+        key="agent_mode",
+        on_change=_on_agent_mode_change,
+        help="Switch between agent architectures.",
+    )
+
 # ── Chat box — 60 % page width ────────────────────────────────────────────────
-st.markdown("<div style='height:1.6rem'></div>", unsafe_allow_html=True)
+st.markdown("<div style='height:0.6rem'></div>", unsafe_allow_html=True)
 
 _, chat_col, _ = st.columns([2, 6, 2])
 
