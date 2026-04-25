@@ -435,6 +435,12 @@ def _render_deep_dive(ctx: dict):
                     )
                     from agents_v3 import run_analysis_v3
                     result = run_analysis_v3(question, df, ctx)
+                elif mode == "V4 Agent":
+                    placeholder.markdown(
+                        "_Running V4 pipeline: Concierge → DataAnalyst → DataEngineer → DataAnalyst…_ ▌"
+                    )
+                    from agents_v4 import run_analysis_v4
+                    result = run_analysis_v4(question, df, ctx)
                 else:
                     placeholder.markdown("_Analysing data…_ ▌")
                     from agents import run_analysis
@@ -652,7 +658,7 @@ _, agent_sel_col, _ = st.columns([2, 6, 2])
 with agent_sel_col:
     st.selectbox(
         "Analysis engine:",
-        options=["ReAct Agent", "Multi-Agent", "V3 Agent"],
+        options=["ReAct Agent", "Multi-Agent", "V3 Agent", "V4 Agent"],
         key="agent_mode",
         on_change=_on_agent_mode_change,
         help="Switch between agent architectures.",
