@@ -89,6 +89,7 @@ class V5State(TypedDict):
     engineer_done: bool
     analyst_done: bool
     reviewer_done: bool
+    custom_log: str
     input_guardrail_passed: bool
     input_guardrail_reason: str
     output_guardrail_passed: bool
@@ -491,6 +492,7 @@ def run_analysis_v5(question: str, *_args, budget: int = 3, **_kwargs) -> dict:
         "engineer_done": False,
         "analyst_done": False,
         "reviewer_done": False,
+        "custom_log": "",
         "input_guardrail_passed": False,
         "input_guardrail_reason": "",
         "output_guardrail_passed": False,
@@ -501,12 +503,14 @@ def run_analysis_v5(question: str, *_args, budget: int = 3, **_kwargs) -> dict:
 
     skipped = "— skipped"
     inp_blocked = not s["input_guardrail_passed"]
+    total_aggs  = sum(len(d.get("data_aggregations", [])) for d in s.get("insight_data", []))
+    total_plots = sum(len(ins.get("plots", []))            for ins in s.get("insights", []))
     rows = [
         ("Input Guardrail",  "✓ Pass" if s["input_guardrail_passed"] else f"✗ Blocked — {s['input_guardrail_reason']}"),
         ("Prepare State",    skipped if inp_blocked else ("✓" if s["prepare_state_done"] else "✗")),
         ("Concierge",        skipped if inp_blocked else f"✓ ({s['spent_budget']}/{s['budget']} budget used)"),
-        ("Data Engineer",    skipped if inp_blocked else ("✓" if s["engineer_done"] else "✗")),
-        ("Data Analyst",     skipped if inp_blocked else ("✓" if s["analyst_done"] else "✗")),
+        ("Data Engineer",    skipped if inp_blocked else (f"✓ — {total_aggs} dataset(s) aggregated" if s["engineer_done"] else "✗")),
+        ("Data Analyst",     skipped if inp_blocked else (f"✓ — {total_plots} plot instruction(s) generated" if s["analyst_done"] else "✗")),
         ("Reviewer",         skipped if inp_blocked else (f"✓ Approved — {s['reviewer_reason']}" if s["reviewer_approved"] else f"↻ Loop — {s['reviewer_reason']}")),
         ("Output Guardrail", skipped if inp_blocked else ("✓ Pass" if s["output_guardrail_passed"] else f"✗ Blocked — {s['output_guardrail_reason']}")),
     ]
@@ -545,7 +549,22 @@ def run_analysis_v5(question: str, *_args, budget: int = 3, **_kwargs) -> dict:
         + (("**Insights:**\n\n" + insights_md) if insights_md else "")
     )
 
+    custom_log = (
+        "**Route taken:**\n\n"
+        f"{route_lines}\n\n"
+        "| Agent | Status |\n"
+        "|---|---|\n"
+        f"{table}"
+    )
+
     insight_plots = [ins.get("plots", []) for ins in s.get("insights", [])]
+
+    if not s["input_guardrail_passed"]:
+        block_message = f"Your question was blocked: {s['input_guardrail_reason']}"
+    elif not s.get("output_guardrail_passed"):
+        block_message = f"The analysis was blocked before delivery: {s['output_guardrail_reason']}"
+    else:
+        block_message = ""
 
     return {
         "analysis": analysis,
@@ -554,4 +573,6 @@ def run_analysis_v5(question: str, *_args, budget: int = 3, **_kwargs) -> dict:
         "insight_plots": insight_plots,
         "executive_summary": s.get("executive_summary", {}),
         "insights": s.get("insights", []),
+        "custom_log": custom_log,
+        "block_message": block_message,
     }

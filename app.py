@@ -475,6 +475,8 @@ def _render_deep_dive(ctx: dict):
                     "insight_plots": result.get("insight_plots", []),
                     "executive_summary": result.get("executive_summary", {}),
                     "insights": result.get("insights", []),
+                    "custom_log": result.get("custom_log", ""),
+                    "block_message": result.get("block_message", ""),
                 })
                 if result.get("follow_up"):
                     st.session_state.suggested_questions = result["follow_up"]
@@ -749,6 +751,15 @@ def _render_v5_output(result: dict):
     exec_summary  = result.get("executive_summary", {})
     insights      = result.get("insights", [])
     insight_plots = result.get("insight_plots", [])
+    custom_log    = result.get("custom_log", "")
+    block_message = result.get("block_message", "")
+
+    if block_message:
+        st.warning(block_message)
+        if custom_log:
+            with st.expander("Pipeline log", expanded=False):
+                st.markdown(custom_log)
+        return
 
     if exec_summary:
         st.markdown("#### Executive Summary")
@@ -769,6 +780,10 @@ def _render_v5_output(result: dict):
             fig = generate_plot_from_instruction(instr, datasets)
             if fig:
                 st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+    if custom_log:
+        with st.expander("Pipeline log", expanded=False):
+            st.markdown(custom_log)
 
 
 with chat_col:
