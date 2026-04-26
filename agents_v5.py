@@ -547,4 +547,11 @@ def run_analysis_v5(question: str, *_args, budget: int = 3, **_kwargs) -> dict:
 
     insight_plots = [ins.get("plots", []) for ins in s.get("insights", [])]
 
-    return {"analysis": analysis, "charts": {}, "follow_up": [], "insight_plots": insight_plots}
+    return {
+        "analysis": analysis,
+        "charts": {},
+        "follow_up": [],
+        "insight_plots": insight_plots,
+        "executive_summary": s.get("executive_summary", {}),
+        "insights": s.get("insights", []),
+    }

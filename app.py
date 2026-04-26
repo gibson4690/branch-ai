@@ -473,6 +473,8 @@ def _render_deep_dive(ctx: dict):
                     "charts": result.get("charts", {}),
                     "branch": branch,
                     "insight_plots": result.get("insight_plots", []),
+                    "executive_summary": result.get("executive_summary", {}),
+                    "insights": result.get("insights", []),
                 })
                 if result.get("follow_up"):
                     st.session_state.suggested_questions = result["follow_up"]
@@ -490,16 +492,7 @@ def _render_deep_dive(ctx: dict):
     follow_up = result.get("follow_up", []) if isinstance(result, dict) else []
 
     if mode == "V5 Agent":
-        st.markdown(analysis)
-        insight_plots = result.get("insight_plots", []) if isinstance(result, dict) else []
-        if insight_plots:
-            from agents_v5 import generate_plot_from_instruction
-            datasets = _v5_datasets()
-            for plots in insight_plots:
-                for instr in plots:
-                    fig = generate_plot_from_instruction(instr, datasets)
-                    if fig:
-                        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        _render_v5_output(result if isinstance(result, dict) else {})
     elif charts:
         _render_inline_analysis(analysis, charts, highlight_branch=branch or None)
     elif metric:
@@ -749,6 +742,35 @@ def _render_analysis_block(content: str, charts: dict, branch: str = ""):
         st.markdown('</div>', unsafe_allow_html=True)
 
 
+def _render_v5_output(result: dict):
+    """Render V5 output: executive summary → insight 1 + plots → insight 2 + plots → …"""
+    from agents_v5 import generate_plot_from_instruction
+    datasets      = _v5_datasets()
+    exec_summary  = result.get("executive_summary", {})
+    insights      = result.get("insights", [])
+    insight_plots = result.get("insight_plots", [])
+
+    if exec_summary:
+        st.markdown("#### Executive Summary")
+        conclusion = exec_summary.get("short_conclusion", "")
+        if conclusion:
+            st.markdown(conclusion)
+        for fact in exec_summary.get("facts", []):
+            st.markdown(f"- {fact}")
+
+    for idx, ins in enumerate(insights):
+        st.divider()
+        st.markdown(f"**Insight {idx + 1}:** {ins.get('insight_question', '')}")
+        answer = ins.get("insight_answer", "")
+        if answer:
+            st.markdown(answer)
+        plots = insight_plots[idx] if idx < len(insight_plots) else ins.get("plots", [])
+        for instr in plots:
+            fig = generate_plot_from_instruction(instr, datasets)
+            if fig:
+                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+
 with chat_col:
     _active_mode = st.session_state.get("agent_mode", "Multi-Agent")
     _mode_badge_color = "#7c3aed" if _active_mode == "Multi-Agent" else "#4f46e5"
@@ -785,11 +807,14 @@ with chat_col:
                 unsafe_allow_html=True,
             )
         else:
-            content       = msg.get("content", "")
-            charts        = msg.get("charts", {})
-            branch        = msg.get("branch", "")
-            insight_plots = msg.get("insight_plots", [])
-            if charts:
+            content  = msg.get("content", "")
+            charts   = msg.get("charts", {})
+            branch   = msg.get("branch", "")
+            is_v5    = bool(msg.get("insights"))
+            if is_v5:
+                st.markdown(_ai_header("V5 Agent", "#0d9488"), unsafe_allow_html=True)
+                _render_v5_output(msg)
+            elif charts:
                 _render_analysis_block(content, charts, branch)
             else:
                 st.markdown(_ai_header(), unsafe_allow_html=True)
@@ -797,14 +822,6 @@ with chat_col:
                     _AI_BUBBLE.format(content=content),
                     unsafe_allow_html=True,
                 )
-            if insight_plots:
-                from agents_v5 import generate_plot_from_instruction
-                datasets = _v5_datasets()
-                for plots in insight_plots:
-                    for instr in plots:
-                        fig = generate_plot_from_instruction(instr, datasets)
-                        if fig:
-                            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
     # ── Deep dive — rendered HERE, before input & suggestions ─────────────────
     if st.session_state.pending_analysis:
