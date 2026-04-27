@@ -1,4 +1,5 @@
 import re
+from datetime import datetime
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -32,8 +33,8 @@ st.markdown("""
     margin-top: 0.6rem !important;
   }
   div[data-testid="stForm"]:focus-within {
-    border-color: #4f46e5 !important;
-    box-shadow: 0 0 0 3px rgba(79,70,229,0.09) !important;
+    border-color: #1d4ed8 !important;
+    box-shadow: 0 0 0 3px rgba(29,78,216,0.09) !important;
   }
   div[data-testid="stForm"] input[type="text"] {
     border: none !important;
@@ -46,7 +47,7 @@ st.markdown("""
   div[data-testid="stForm"] input[type="text"]::placeholder { color: #9ca3af !important; }
   div[data-testid="stForm"] label { display: none !important; }
   div[data-testid="stForm"] [data-testid="stFormSubmitButton"] > button {
-    background: linear-gradient(135deg, #4f46e5, #7c3aed) !important;
+    background: linear-gradient(135deg, #1d4ed8, #2563eb) !important;
     color: #fff !important;
     border: none !important;
     border-radius: 11px !important;
@@ -56,7 +57,7 @@ st.markdown("""
     padding: 0 !important;
     font-size: 1.05rem !important;
     line-height: 1 !important;
-    box-shadow: 0 2px 8px rgba(79,70,229,0.22) !important;
+    box-shadow: 0 2px 8px rgba(29,78,216,0.22) !important;
     transition: opacity 0.15s, box-shadow 0.15s !important;
     display: flex !important;
     align-items: center !important;
@@ -64,10 +65,10 @@ st.markdown("""
   }
   div[data-testid="stForm"] [data-testid="stFormSubmitButton"] > button:hover {
     opacity: 0.88 !important;
-    box-shadow: 0 4px 14px rgba(79,70,229,0.32) !important;
+    box-shadow: 0 4px 14px rgba(29,78,216,0.32) !important;
   }
   div[data-testid="stForm"] [data-testid="stFormSubmitButton"] > button:focus {
-    box-shadow: 0 0 0 3px rgba(79,70,229,0.2) !important;
+    box-shadow: 0 0 0 3px rgba(29,78,216,0.2) !important;
   }
   /* Keep columns inside the form vertically centred */
   div[data-testid="stForm"] [data-testid="stHorizontalBlock"] {
@@ -117,16 +118,16 @@ st.markdown("""
     transition: background 0.15s, color 0.15s, border-color 0.15s !important;
   }
   div[data-testid="stVerticalBlockBorderWrapper"] .stButton button:hover {
-    background: #e0e7ff !important; color: #4f46e5 !important;
-    border-color: #c7d2fe !important;
+    background: #dbeafe !important; color: #1d4ed8 !important;
+    border-color: #bfdbfe !important;
   }
 
   /* ── Suggested question pill buttons ── */
   .stButton button[kind="primary"] {
-    background: #f8f9ff !important;
-    border: 1.5px solid #c7d2fe !important;
+    background: #eff6ff !important;
+    border: 1.5px solid #bfdbfe !important;
     border-radius: 20px !important;
-    color: #4338ca !important;
+    color: #1d4ed8 !important;
     font-size: 0.82rem !important;
     font-weight: 500 !important;
     padding: 0.35rem 1rem !important;
@@ -136,10 +137,10 @@ st.markdown("""
     text-align: center !important;
   }
   .stButton button[kind="primary"]:hover {
-    background: #e0e7ff !important;
-    border-color: #818cf8 !important;
-    color: #3730a3 !important;
-    box-shadow: 0 2px 8px rgba(79,70,229,0.15) !important;
+    background: #dbeafe !important;
+    border-color: #60a5fa !important;
+    color: #1e3a8a !important;
+    box-shadow: 0 2px 8px rgba(29,78,216,0.15) !important;
     transform: translateY(-1px) !important;
   }
 
@@ -151,6 +152,14 @@ st.markdown("""
   }
   .analysis-body li { margin-bottom: 0.3rem !important; line-height: 1.7 !important; }
   .analysis-body p  { margin-bottom: 0.55rem !important; line-height: 1.65 !important; }
+
+  /* ── AI analysis bubble (wraps charts + text via st.container border) ── */
+  [data-testid="stVerticalBlockBorderWrapper"] > div {
+    border-radius: 4px 18px 18px 18px !important;
+    border-color: #e2e8f0 !important;
+    background: #eff6ff !important;
+    box-shadow: 0 2px 10px rgba(29,78,216,0.07) !important;
+  }
 </style>
 """, unsafe_allow_html=True)
 
@@ -178,12 +187,26 @@ _DEFAULT_QUESTIONS = [
     "Which branches are losing the most customers?",
 ]
 
+def _time_greeting() -> str:
+    hour = datetime.now().hour
+    if hour < 12:
+        return "Good morning"
+    elif hour < 17:
+        return "Good afternoon"
+    else:
+        return "Good evening"
+
+_GREETING = (
+    f"{_time_greeting()}, Country Manager! I'm Sagara, your personal concierge to all branch related insights. "
+    "What would you like to know today?"
+)
+
 for key, default in [
-    ("chat_messages", []),
+    ("chat_messages", [{"role": "assistant", "content": _GREETING}]),
     ("pending_analysis", None),
     ("_scroll_to_chat", False),
     ("suggested_questions", _DEFAULT_QUESTIONS),
-    ("agent_mode", "Multi-Agent"),
+    ("agent_mode", "V5 Agent"),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
@@ -554,9 +577,9 @@ st.markdown(f"""
     box-shadow: 0 1px 10px rgba(0,0,0,0.06);
     padding: 0.6rem 3rem;
     display: flex; align-items: center; gap: 1rem;">
-  <div style="background:linear-gradient(135deg,#4f46e5,#7c3aed);border-radius:11px;
+  <div style="background:linear-gradient(135deg,#1d4ed8,#2563eb);border-radius:11px;
               padding:0.52rem;display:flex;align-items:center;justify-content:center;
-              box-shadow:0 3px 12px rgba(79,70,229,0.30);">
+              box-shadow:0 3px 12px rgba(29,78,216,0.30);">
     <svg width="26" height="26" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
       <circle cx="15" cy="6"  r="2.8" fill="white"/>
       <circle cx="6"  cy="22" r="2.8" fill="white"/>
@@ -571,7 +594,7 @@ st.markdown(f"""
     <div style="font-size:1.65rem;font-weight:900;letter-spacing:-0.04em;line-height:1;
                 font-family:'Inter','SF Pro Display','Segoe UI',sans-serif;">
       <span style="color:#111827;">Branch</span><span
-        style="background:linear-gradient(135deg,#4f46e5,#7c3aed);
+        style="background:linear-gradient(135deg,#1d4ed8,#2563eb);
                -webkit-background-clip:text;-webkit-text-fill-color:transparent;
                background-clip:text;">.ai</span>
     </div>
@@ -697,51 +720,36 @@ _, chat_col, _ = st.columns([2, 6, 2])
 
 # ── Helpers for custom message bubbles ───────────────────────────────────────
 _USER_BUBBLE = """
-<div style="display:flex;justify-content:flex-end;margin:0.55rem 0 0.2rem;">
-  <div style="background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;
+<div style="display:flex;justify-content:flex-end;align-items:flex-end;gap:0.45rem;margin:0.55rem 0 0.75rem;">
+  <div style="background:linear-gradient(135deg,#1d4ed8,#2563eb);color:#fff;
               border-radius:18px 18px 4px 18px;padding:0.7rem 1.05rem;
               max-width:78%;font-size:0.875rem;line-height:1.55;
-              box-shadow:0 2px 10px rgba(79,70,229,0.18);">
+              box-shadow:0 2px 10px rgba(29,78,216,0.18);">
     {content}
   </div>
-</div>"""
-
-_AI_HEADER = """
-<div style="display:flex;align-items:center;gap:0.45rem;margin:0.9rem 0 0.25rem;">
   <div style="width:27px;height:27px;border-radius:8px;flex-shrink:0;
-              background:linear-gradient(135deg,#4f46e5,#7c3aed);
-              display:flex;align-items:center;justify-content:center;font-size:13px;">🏦</div>
-  <span style="font-size:0.74rem;font-weight:700;color:#6b7280;letter-spacing:0.04em;
-               text-transform:uppercase;">Branch.ai</span>
-  {badge}
+              background:linear-gradient(135deg,#6b7280,#374151);
+              display:flex;align-items:center;justify-content:center;font-size:13px;">👤</div>
 </div>"""
 
-_AI_BUBBLE = """
-<div style="margin-left:36px;background:#fff;border:1px solid #eaecf0;
-            border-radius:4px 16px 16px 16px;padding:0.8rem 1.05rem;
-            box-shadow:0 1px 4px rgba(0,0,0,0.05);font-size:0.875rem;
-            line-height:1.6;color:#1f2937;margin-bottom:0.3rem;">
-  {content}
+
+_AGENT_ICON_HTML = """
+<div style="display:flex;justify-content:center;padding-top:0.55rem;">
+  <div style="width:27px;height:27px;border-radius:8px;
+              background:linear-gradient(135deg,#1d4ed8,#2563eb);
+              display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;font-family:'Georgia',serif;letter-spacing:0;">S</div>
 </div>"""
 
-def _ai_header(badge_label: str = "", badge_color: str = "#7c3aed") -> str:
-    badge = (
-        f'<span style="background:{badge_color};color:#fff;border-radius:8px;'
-        f'padding:1px 7px;font-size:0.68rem;font-weight:600;">{badge_label}</span>'
-        if badge_label else ""
-    )
-    return _AI_HEADER.format(badge=badge)
 
 def _render_analysis_block(content: str, charts: dict, branch: str = ""):
-    """Avatar header + analysis with inline charts (no HTML wrapper — Streamlit renders charts)."""
-    mode = st.session_state.get("agent_mode", "Multi-Agent")
-    badge = "Multi-Agent" if mode == "Multi-Agent" else "ReAct"
-    badge_color = "#7c3aed" if mode == "Multi-Agent" else "#4f46e5"
-    st.markdown(_ai_header(badge, badge_color), unsafe_allow_html=True)
-    with st.container():
-        st.markdown('<div class="analysis-body">', unsafe_allow_html=True)
-        _render_inline_analysis(content, charts, highlight_branch=branch or None)
-        st.markdown('</div>', unsafe_allow_html=True)
+    col_icon, col_content = st.columns([1, 17])
+    with col_icon:
+        st.markdown(_AGENT_ICON_HTML, unsafe_allow_html=True)
+    with col_content:
+        with st.container(border=True):
+            st.markdown('<div class="analysis-body">', unsafe_allow_html=True)
+            _render_inline_analysis(content, charts, highlight_branch=branch or None)
+            st.markdown('</div>', unsafe_allow_html=True)
 
 
 def _render_v5_output(result: dict):
@@ -788,14 +796,14 @@ def _render_v5_output(result: dict):
 
 with chat_col:
     _active_mode = st.session_state.get("agent_mode", "Multi-Agent")
-    _mode_badge_color = "#7c3aed" if _active_mode == "Multi-Agent" else "#4f46e5"
+    _mode_badge_color = "#2563eb" if _active_mode == "Multi-Agent" else "#1d4ed8"
     _mode_label = "Multi-Agent" if _active_mode == "Multi-Agent" else "ReAct"
 
     # ── Section header ────────────────────────────────────────────────────────
     st.markdown(f"""
     <div id="chat-section" style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.9rem;">
       <div style="width:34px;height:34px;border-radius:10px;flex-shrink:0;
-                  background:linear-gradient(135deg,#4f46e5,#7c3aed);
+                  background:linear-gradient(135deg,#1d4ed8,#2563eb);
                   display:flex;align-items:center;justify-content:center;">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
              fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -827,28 +835,33 @@ with chat_col:
             branch   = msg.get("branch", "")
             is_v5    = bool(msg.get("insights"))
             if is_v5:
-                st.markdown(_ai_header("V5 Agent", "#0d9488"), unsafe_allow_html=True)
-                _render_v5_output(msg)
+                col_icon, col_content = st.columns([1, 17])
+                with col_icon:
+                    st.markdown(_AGENT_ICON_HTML, unsafe_allow_html=True)
+                with col_content:
+                    with st.container(border=True):
+                        _render_v5_output(msg)
             elif charts:
                 _render_analysis_block(content, charts, branch)
             else:
-                st.markdown(_ai_header(), unsafe_allow_html=True)
-                st.markdown(
-                    _AI_BUBBLE.format(content=content),
-                    unsafe_allow_html=True,
-                )
+                col_icon, col_content = st.columns([1, 17])
+                with col_icon:
+                    st.markdown(_AGENT_ICON_HTML, unsafe_allow_html=True)
+                with col_content:
+                    with st.container(border=True):
+                        st.markdown(content)
 
     # ── Deep dive — rendered HERE, before input & suggestions ─────────────────
     if st.session_state.pending_analysis:
         ctx = st.session_state.pending_analysis
-        mode = st.session_state.get("agent_mode", "Multi-Agent")
-        badge = "Multi-Agent" if mode == "Multi-Agent" else "ReAct"
-        badge_color = "#7c3aed" if mode == "Multi-Agent" else "#4f46e5"
-        st.markdown(_ai_header(badge, badge_color), unsafe_allow_html=True)
-        with st.container():
-            st.markdown('<div class="analysis-body">', unsafe_allow_html=True)
-            _render_deep_dive(ctx)
-            st.markdown('</div>', unsafe_allow_html=True)
+        col_icon, col_content = st.columns([1, 17])
+        with col_icon:
+            st.markdown(_AGENT_ICON_HTML, unsafe_allow_html=True)
+        with col_content:
+            with st.container(border=True):
+                st.markdown('<div class="analysis-body">', unsafe_allow_html=True)
+                _render_deep_dive(ctx)
+                st.markdown('</div>', unsafe_allow_html=True)
         st.session_state.pending_analysis = None
         st.rerun()
 
