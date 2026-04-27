@@ -719,17 +719,21 @@ st.markdown("<div style='height:0.6rem'></div>", unsafe_allow_html=True)
 _, chat_col, _ = st.columns([2, 6, 2])
 
 # ── Helpers for custom message bubbles ───────────────────────────────────────
-_USER_BUBBLE = """
-<div style="display:flex;justify-content:flex-end;align-items:flex-end;gap:0.45rem;margin:0.55rem 0 0.75rem;">
+_USER_ICON_HTML = """
+<div style="display:flex;justify-content:center;padding-top:0.55rem;">
+  <div style="width:27px;height:27px;border-radius:8px;
+              background:linear-gradient(135deg,#6b7280,#374151);
+              display:flex;align-items:center;justify-content:center;font-size:13px;">👤</div>
+</div>"""
+
+_USER_BUBBLE_INNER = """
+<div style="display:flex;justify-content:flex-end;margin:0.55rem 0 0.75rem;">
   <div style="background:linear-gradient(135deg,#1d4ed8,#2563eb);color:#fff;
               border-radius:18px 18px 4px 18px;padding:0.7rem 1.05rem;
-              max-width:78%;font-size:0.875rem;line-height:1.55;
+              display:inline-block;max-width:90%;font-size:0.875rem;line-height:1.55;
               box-shadow:0 2px 10px rgba(29,78,216,0.18);">
     {content}
   </div>
-  <div style="width:27px;height:27px;border-radius:8px;flex-shrink:0;
-              background:linear-gradient(135deg,#6b7280,#374151);
-              display:flex;align-items:center;justify-content:center;font-size:13px;">👤</div>
 </div>"""
 
 
@@ -799,44 +803,24 @@ with chat_col:
     _mode_badge_color = "#2563eb" if _active_mode == "Multi-Agent" else "#1d4ed8"
     _mode_label = "Multi-Agent" if _active_mode == "Multi-Agent" else "ReAct"
 
-    # ── Section header ────────────────────────────────────────────────────────
-    st.markdown(f"""
-    <div id="chat-section" style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.9rem;">
-      <div style="width:34px;height:34px;border-radius:10px;flex-shrink:0;
-                  background:linear-gradient(135deg,#1d4ed8,#2563eb);
-                  display:flex;align-items:center;justify-content:center;">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
-             fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-        </svg>
-      </div>
-      <div>
-        <div style="font-size:0.95rem;font-weight:800;color:#111827;letter-spacing:-0.02em;line-height:1.15;">
-          Ask the Data
-        </div>
-        <div style="font-size:0.71rem;color:#9ca3af;margin-top:0.05rem;">powered by Branch.ai</div>
-      </div>
-      <span style="margin-left:auto;background:{_mode_badge_color};color:#fff;
-                   border-radius:10px;padding:2px 10px;font-size:0.71rem;font-weight:700;
-                   letter-spacing:0.04em;text-transform:uppercase;">{_mode_label}</span>
-    </div>
-    """, unsafe_allow_html=True)
+
 
     # ── Message history ───────────────────────────────────────────────────────
     for msg in st.session_state.chat_messages[-6:]:
         if msg["role"] == "user":
-            st.markdown(
-                _USER_BUBBLE.format(content=msg["content"]),
-                unsafe_allow_html=True,
-            )
+            col_icon1, col_content, col_icon2 = st.columns([1, 17, 1])
+            with col_content:
+                st.markdown(_USER_BUBBLE_INNER.format(content=msg["content"]), unsafe_allow_html=True)
+            with col_icon2:
+                st.markdown(_USER_ICON_HTML, unsafe_allow_html=True)
         else:
             content  = msg.get("content", "")
             charts   = msg.get("charts", {})
             branch   = msg.get("branch", "")
             is_v5    = bool(msg.get("insights"))
             if is_v5:
-                col_icon, col_content = st.columns([1, 17])
-                with col_icon:
+                col_icon1, col_content, col_icon2 = st.columns([1, 17, 1])
+                with col_icon1:
                     st.markdown(_AGENT_ICON_HTML, unsafe_allow_html=True)
                 with col_content:
                     with st.container(border=True):
@@ -844,8 +828,8 @@ with chat_col:
             elif charts:
                 _render_analysis_block(content, charts, branch)
             else:
-                col_icon, col_content = st.columns([1, 17])
-                with col_icon:
+                col_icon1, col_content, col_icon2 = st.columns([1, 17, 1])
+                with col_icon1:
                     st.markdown(_AGENT_ICON_HTML, unsafe_allow_html=True)
                 with col_content:
                     with st.container(border=True):
@@ -854,8 +838,8 @@ with chat_col:
     # ── Deep dive — rendered HERE, before input & suggestions ─────────────────
     if st.session_state.pending_analysis:
         ctx = st.session_state.pending_analysis
-        col_icon, col_content = st.columns([1, 17])
-        with col_icon:
+        col_icon1, col_content, col_icon2 = st.columns([1, 17, 1])
+        with col_icon1:
             st.markdown(_AGENT_ICON_HTML, unsafe_allow_html=True)
         with col_content:
             with st.container(border=True):
